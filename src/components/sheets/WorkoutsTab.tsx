@@ -4,9 +4,9 @@
  * + Add set duplication, done checkboxes, live session volume tween and the
  * all-sets-complete white border flash.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronDown, Lock, Pencil, Plus } from 'lucide-react'
+import { Check, ChevronDown, Lock, Minus, Pencil, Plus } from 'lucide-react'
 import { logsForWeek, LOG_WEEKS, volumeForWeek } from '@/data/mock'
 import { cn } from '@/lib/utils'
 import { CustomCell, EditableCell, HeaderCell } from './grid'
@@ -109,10 +109,12 @@ function SessionPanel({
   meta,
   open,
   onToggle,
+  addSetHandlers,
 }: {
   meta: SessionMeta
   open: boolean
   onToggle: () => void
+  addSetHandlers: { current: Map<string, () => void> }
 }) {
   const vault = useVault()
   const rows = getSessionRows(vault, meta.key)
@@ -133,11 +135,53 @@ function SessionPanel({
     return () => clearTimeout(t)
   }, [flash])
 
-  const ctl = useSheetGrid(rows.length, 6, (_r, c) => {
+  // Google Sheets-style exercise grouping: consecutive rows of the same
+  // exercise sit behind one name cell with a small +/− toggle. Collapsed
+  // groups render only their last row ("Sandbag Lunge · Set 4 …").
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  const groups: { name: string; start: number; count: number }[] = []
+  rows.forEach((row, i) => {
+    const last = groups[groups.length - 1]
+    if (last && last.name === row.exercise) last.count += 1
+    else groups.push({ name: row.exercise, start: i, count: 1 })
+  })
+  const groupAt = (i: number) => groups.find((g) => i >= g.start && i < g.start + g.count)!
+  const isHidden = (i: number) => {
+    const g = groupAt(i)
+    return collapsed.has(g.name) && i !== g.start + g.count - 1
+  }
+
+  const ctl = useSheetGrid(rows.length, 6, (r, c) => {
+    if (isHidden(r)) return { focusable: false, editable: false }
     if (readOnly) return { focusable: true, editable: false }
     if (c === 1) return { focusable: false, editable: false } // set number
     if (c === 5) return { focusable: true, editable: false } // done checkbox
     return { focusable: true, editable: true }
+  })
+
+  const toggleGroup = (name: string) => {
+    if (!collapsed.has(name)) ctl.blur() // the active cell may be inside the rows about to hide
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  // + Add set duplicates the focused row (same exercise, reps, kg, RPE),
+  // inserted right after it — like copying a row in Sheets. Falls back to
+  // the session's last row when no cell is focused.
+  const addSet = () => {
+    const activeId = ctl.active != null ? rows[ctl.active.r]?.id : undefined
+    vaultActions.addSetRow(meta.key, activeId ?? rows[rows.length - 1]?.id ?? null)
+  }
+  useEffect(() => {
+    const handlers = addSetHandlers.current
+    handlers.set(meta.key, addSet)
+    return () => {
+      handlers.delete(meta.key)
+    }
   })
 
   // Sheet (grid) ⇄ Plan (web-style blocks) view toggle
@@ -262,7 +306,12 @@ function SessionPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, r) => (
+                  {rows.map((row, r) => {
+                    if (isHidden(r)) return null
+                    const g = groupAt(r)
+                    const gCollapsed = collapsed.has(g.name)
+                    const isStart = r === g.start
+                    return (
                     <motion.tr
                       key={row.id}
                       initial={{ opacity: 0 }}
@@ -274,12 +323,34 @@ function SessionPanel({
                         ctl={ctl}
                         r={r}
                         c={0}
-                        value={row.exercise}
+                        value={isStart || gCollapsed ? row.exercise : ''}
+                        blank={!isStart && !gCollapsed}
                         options={exerciseLibrary}
                         getLabel={(x) => x}
                         disabled={readOnly}
                         onSelect={(name) => update(row, { exercise: name })}
                         placeholder="Search exercises…"
+                        trailer={
+                          g.count > 1 ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleGroup(g.name)
+                              }}
+                              aria-expanded={!gCollapsed}
+                              aria-label={
+                                gCollapsed
+                                  ? `Show all ${g.count} sets of ${g.name}`
+                                  : `Collapse ${g.name} to one row`
+                              }
+                              title={gCollapsed ? `Show all ${g.count} sets` : 'Collapse group'}
+                              className="flex h-4 w-4 shrink-0 items-center justify-center border border-vault-border text-vault-muted transition-colors hover:border-white hover:text-white"
+                            >
+                              {gCollapsed ? <Plus className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                            </button>
+                          ) : undefined
+                        }
                       />
                       <td className="h-11 border border-vault-border/60 px-3 text-center text-[13px] text-vault-muted tabular-nums">
                         {row.set}
@@ -326,7 +397,8 @@ function SessionPanel({
                         </button>
                       </CustomCell>
                     </motion.tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -337,7 +409,8 @@ function SessionPanel({
               <div className="border-t border-vault-border/60 px-4 py-2.5">
                 <button
                   type="button"
-                  onClick={() => vaultActions.addSetRow(meta.key, rows[rows.length - 1]?.id ?? null)}
+                  onClick={addSet}
+                  title="Duplicate the selected row — select any cell in a row first (defaults to the last row)"
                   className="btn-ghost text-[11px]"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add set
@@ -375,12 +448,20 @@ export default function WorkoutsTab({
   const [openKey, setOpenKey] = useState<string | null>(
     isLatest ? PLANNED_SESSION_KEY : (metas[0]?.key ?? null),
   )
+  // Each SessionPanel registers its own add-set handler here so the toolbar
+  // "Add row" duplicates the row focused inside that panel.
+  const addSetHandlers = useRef(new Map<string, () => void>())
 
   useEffect(() => {
     registerAddRow(() => {
       if (!openKey || isSessionReadOnly(vault, openKey)) return
-      const rows = getSessionRows(vault, openKey)
-      vaultActions.addSetRow(openKey, rows[rows.length - 1]?.id ?? null)
+      const handler = addSetHandlers.current.get(openKey)
+      if (handler) {
+        handler()
+      } else {
+        const rows = getSessionRows(vault, openKey)
+        vaultActions.addSetRow(openKey, rows[rows.length - 1]?.id ?? null)
+      }
     })
     return () => registerAddRow(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -411,6 +492,7 @@ export default function WorkoutsTab({
             meta={m}
             open={openKey === m.key}
             onToggle={() => setOpenKey(openKey === m.key ? null : m.key)}
+            addSetHandlers={addSetHandlers}
           />
         ))}
       </div>

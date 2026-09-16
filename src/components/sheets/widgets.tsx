@@ -3,7 +3,7 @@
  * volumes, macro bars) and the dark combobox cell used for exercises/foods.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { animate, motion, useMotionValue, useTransform } from 'framer-motion'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -55,6 +55,10 @@ interface ComboCellProps<T> {
   placeholder?: string
   disabled?: boolean
   align?: 'left' | 'right'
+  /** render nothing at all (grouped exercise continuation rows) */
+  blank?: boolean
+  /** small adornment after the label (e.g. the group collapse toggle) */
+  trailer?: ReactNode
 }
 
 export function ComboCell<T>({
@@ -68,6 +72,8 @@ export function ComboCell<T>({
   placeholder = 'Search…',
   disabled = false,
   align = 'left',
+  blank = false,
+  trailer,
 }: ComboCellProps<T>) {
   const isActive = ctl.isActive(r, c)
   const open = ctl.isEditing(r, c) && !disabled
@@ -155,9 +161,14 @@ export function ComboCell<T>({
           onBlur={() => ctl.stopEdit()}
           className="w-full bg-transparent p-0 text-[13px] text-white outline-none"
         />
+      ) : blank ? (
+        <span aria-hidden="true" />
       ) : (
-        <span className={cn('block truncate', !value && 'text-vault-faint')}>
-          {value || '—'}
+        <span className="flex items-center gap-1.5">
+          <span className={cn('block min-w-0 flex-1 truncate', !value && 'text-vault-faint')}>
+            {value || '—'}
+          </span>
+          {trailer}
         </span>
       )}
 

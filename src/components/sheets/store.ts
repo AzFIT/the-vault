@@ -352,16 +352,22 @@ export const vaultActions = {
     const base = [...(state.workoutEdits[key] ?? defaultSessionRows(key))]
     const src = afterId ? base.find((r) => r.id === afterId) : base[base.length - 1]
     if (!src) return
-    const sameEx = base.filter((r) => r.exercise === src.exercise)
     const row: SetRow = {
       ...src,
       id: `${key}-add-${Date.now()}`,
-      set: sameEx.length + 1,
       done: false,
     }
     const idx = afterId ? base.findIndex((r) => r.id === afterId) : base.length - 1
     base.splice(idx + 1, 0, row)
-    setState({ workoutEdits: { ...state.workoutEdits, [key]: base } })
+    // Renumber sets per exercise in display order — the duplicate may be
+    // inserted mid-group, shifting the numbers of the rows that follow it.
+    const seen = new Map<string, number>()
+    const renumbered = base.map((r) => {
+      const n = (seen.get(r.exercise) ?? 0) + 1
+      seen.set(r.exercise, n)
+      return r.set === n ? r : { ...r, set: n }
+    })
+    setState({ workoutEdits: { ...state.workoutEdits, [key]: renumbered } })
   },
 
   toggleSessionLock(key: string) {
