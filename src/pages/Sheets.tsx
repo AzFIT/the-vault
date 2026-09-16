@@ -5,8 +5,10 @@
  * layoutId tab underline. All persistence is local state (no backend).
  */
 import { useCallback, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -61,7 +63,25 @@ function downloadCSV(filename: string, rows: string[][]) {
 
 export default function Sheets() {
   const vault = useVault()
-  const [tab, setTab] = useState<TabId>('daily')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = ((): TabId => {
+    const t = searchParams.get('tab')
+    return TABS.some((x) => x.id === t) ? (t as TabId) : 'daily'
+  })()
+  const [tab, setTabState] = useState<TabId>(initialTab)
+  // Keep the URL in sync so "Open in Sheets" deep-links (e.g. ?tab=workouts)
+  // survive refreshes and can be shared.
+  const setTab = (t: TabId) => {
+    setTabState(t)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('tab', t)
+        return next
+      },
+      { replace: true },
+    )
+  }
   const [week, setWeek] = useState(LOG_WEEKS - 1)
   const dates = weekDates(week)
   const addRowRef = useRef<(() => void) | null>(null)
@@ -94,7 +114,11 @@ export default function Sheets() {
     <div className="space-y-5">
       {/* Section 1 — tabs + toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Tracking sheets" className="flex gap-5">
+        <div className="flex items-center gap-4">
+          <Link to="/dashboard" className="btn-ghost shrink-0 !py-1.5 text-[11px]">
+            <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
+          </Link>
+          <div role="tablist" aria-label="Tracking sheets" className="flex gap-5">
           {TABS.map((t) => {
             const active = tab === t.id
             return (
@@ -124,6 +148,7 @@ export default function Sheets() {
               </button>
             )
           })}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">

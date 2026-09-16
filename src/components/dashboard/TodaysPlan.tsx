@@ -200,7 +200,7 @@ export default function TodaysPlan() {
             transition={{ duration: 0.4, ease: 'easeOut' }}
           />
         </div>
-        <Link to="/sheets" className="btn-ghost shrink-0">
+        <Link to="/sheets?tab=workouts" className="btn-ghost shrink-0">
           Open in Sheets <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>

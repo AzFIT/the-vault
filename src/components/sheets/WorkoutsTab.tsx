@@ -29,6 +29,82 @@ const parseNum = (s: string): number | null => {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
+/**
+ * Plan (web) view — the same set rows as the sheet grid, grouped by exercise
+ * and rendered as clean dashboard-style blocks: exercise header with its
+ * "N×reps @ kg" prescription, then one compact line per set. Done toggles
+ * write through to the same shared store as the grid.
+ */
+function PlanView({
+  rows,
+  readOnly,
+  update,
+}: {
+  rows: SetRow[]
+  readOnly: boolean
+  update: (row: SetRow, patch: Partial<SetRow>) => void
+}) {
+  const groups: { name: string; rows: SetRow[] }[] = []
+  for (const r of rows) {
+    const g = groups.find((g) => g.name === r.exercise)
+    if (g) g.rows.push(r)
+    else groups.push({ name: r.exercise, rows: [r] })
+  }
+
+  return (
+    <div className="space-y-5 px-4 py-4 md:px-5">
+      {groups.map((g) => {
+        const { reps, kg } = g.rows[0]
+        return (
+          <div key={g.name}>
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-[14px] font-medium">{g.name}</p>
+              <p className="text-[12px] text-vault-muted tabular-nums">
+                {g.rows.length}×{reps}
+                {kg > 0 ? ` @ ${kg}kg` : ''}
+              </p>
+            </div>
+            <ul className="mt-1.5 divide-y divide-vault-border/40 border border-vault-border/60">
+              {g.rows.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex items-center gap-3 px-3 py-1.5 text-[13px] tabular-nums"
+                >
+                  <span className="w-6 text-vault-muted">{row.set}</span>
+                  <span className={row.done ? 'text-white/40 line-through' : 'text-white'}>
+                    {row.reps} reps
+                  </span>
+                  <span className={row.done ? 'text-white/40 line-through' : 'text-white'}>
+                    {row.kg > 0 ? `${row.kg} kg` : '—'}
+                  </span>
+                  <span className={`ml-auto text-[12px] ${row.done ? 'text-white/40' : 'text-vault-muted'}`}>
+                    RPE {row.rpe > 0 ? row.rpe : '—'}
+                  </span>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={row.done}
+                    aria-label={`Mark ${row.exercise} set ${row.set} done`}
+                    disabled={readOnly}
+                    onClick={() => update(row, { done: !row.done })}
+                    className={cn(
+                      'flex h-[18px] w-[18px] shrink-0 items-center justify-center border transition-colors',
+                      row.done ? 'border-white bg-white' : 'border-white/60 bg-transparent hover:border-white',
+                      readOnly && 'cursor-default opacity-60',
+                    )}
+                  >
+                    {row.done && <Check className="h-3 w-3 text-vault-bg" strokeWidth={3} />}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function SessionPanel({
   meta,
   open,
@@ -63,6 +139,9 @@ function SessionPanel({
     if (c === 5) return { focusable: true, editable: false } // done checkbox
     return { focusable: true, editable: true }
   })
+
+  // Sheet (grid) ⇄ Plan (web-style blocks) view toggle
+  const [view, setView] = useState<'sheet' | 'plan'>('sheet')
 
   const update = (row: SetRow, patch: Partial<SetRow>) =>
     vaultActions.updateSetRow(meta.key, row.id, patch)
@@ -108,6 +187,36 @@ function SessionPanel({
             <TweenNumber value={volume} /> <span className="text-[11px] font-normal text-vault-muted">kg</span>
           </span>
         </button>
+        {open && (
+          <div
+            role="group"
+            aria-label="Session view"
+            className="mr-1 flex shrink-0 items-center border border-vault-border/70 text-[10px] uppercase tracking-[0.08em]"
+          >
+            <button
+              type="button"
+              aria-pressed={view === 'sheet'}
+              onClick={() => setView('sheet')}
+              className={cn(
+                'px-2 py-1 transition-colors',
+                view === 'sheet' ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white',
+              )}
+            >
+              Sheet
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === 'plan'}
+              onClick={() => setView('plan')}
+              className={cn(
+                'px-2 py-1 transition-colors',
+                view === 'plan' ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white',
+              )}
+            >
+              Plan
+            </button>
+          </div>
+        )}
         {readOnly ? (
           <button
             type="button"
@@ -139,7 +248,8 @@ function SessionPanel({
             transition={{ duration: 0.35, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div {...ctl.containerProps} className="overflow-x-auto outline-none">
+            {view === 'sheet' ? (
+              <div {...ctl.containerProps} className="overflow-x-auto outline-none">
               <table className="w-full min-w-[640px] border-collapse" role="grid" aria-label={`${meta.label} sets`}>
                 <thead>
                   <tr>
@@ -220,7 +330,10 @@ function SessionPanel({
                 </tbody>
               </table>
             </div>
-            {!readOnly && (
+            ) : (
+              <PlanView rows={rows} readOnly={readOnly} update={update} />
+            )}
+            {!readOnly && view === 'sheet' && (
               <div className="border-t border-vault-border/60 px-4 py-2.5">
                 <button
                   type="button"
