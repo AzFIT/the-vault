@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Search } from 'lucide-react'
+import { ChevronDown, Search } from 'lucide-react'
 import type { Client } from '@/data/mock'
 import { coachClients, getProgramById, LOG_END_DATE } from '@/data/mock'
 import { GridAvatar, TierPill, StatusPill, SectionHeader } from './shared'
@@ -9,6 +9,14 @@ import { isAtRisk } from './utils'
 export type RosterFilter = 'ALL' | 'PT 3X' | 'PT 2X' | "WOMEN'S" | 'AT RISK'
 
 const FILTERS: RosterFilter[] = ['ALL', 'PT 3X', 'PT 2X', "WOMEN'S", 'AT RISK']
+
+const loadAdded = (): Client[] => {
+  try {
+    return JSON.parse(localStorage.getItem('vault-added-clients') ?? '[]') as Client[]
+  } catch {
+    return []
+  }
+}
 
 function shiftDay(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00`)
@@ -43,11 +51,20 @@ export default function ClientRoster({
   onSelect: (c: Client) => void
 }) {
   const [query, setQuery] = useState('')
-  const atRiskCount = coachClients.filter(isAtRisk).length
+  const [collapsed, setCollapsed] = useState(false)
+  // Clients added via the KPI card popup share the same localStorage store
+  const [added, setAdded] = useState<Client[]>(loadAdded)
+  useEffect(() => {
+    const refresh = () => setAdded(loadAdded())
+    window.addEventListener('vault-clients-changed', refresh)
+    return () => window.removeEventListener('vault-clients-changed', refresh)
+  }, [])
+  const allClients = useMemo(() => [...added, ...coachClients], [added])
+  const atRiskCount = allClients.filter(isAtRisk).length
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return coachClients.filter(
+    return allClients.filter(
       (c) =>
         matchesFilter(c, filter) &&
         (q === '' ||
@@ -57,13 +74,52 @@ export default function ClientRoster({
             .toLowerCase()
             .includes(q)),
     )
-  }, [query, filter, programOverrides])
+  }, [query, filter, programOverrides, allClients])
 
   return (
     <section className="app-card p-6">
-      <SectionHeader eyebrow="Clients" title="Client roster" />
+      <div className="flex items-start justify-between gap-3">
+        <SectionHeader eyebrow="Clients" title="Client roster" />
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand client roster' : 'Collapse client roster'}
+          onClick={() => setCollapsed((c) => !c)}
+          className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center border border-vault-border/70 text-vault-faint transition-colors hover:border-white hover:text-white"
+        >
+          <motion.span animate={{ rotate: collapsed ? 180 : 0 }} transition={{ duration: 0.25 }} className="flex">
+            <ChevronDown className="h-3.5 w-3.5" />
+          </motion.span>
+        </button>
+      </div>
 
-      {/* Search + filter chips */}
+      <AnimatePresence initial={false}>
+        {collapsed && (
+          <motion.p
+            key="summary"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden text-[13px] text-vault-muted"
+          >
+            <span className="tnum font-bold text-white">{allClients.length}</span> clients ·{' '}
+            <span className="tnum">{atRiskCount}</span> at risk — roster hidden. Click the chevron to
+            view the full list.
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key="body"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => {
@@ -176,6 +232,9 @@ export default function ClientRoster({
           No clients match this filter.
         </p>
       )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   )
 }

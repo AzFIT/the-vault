@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Plus } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
 import { SectionHeader } from './shared'
 import {
   TODAY_SCHEDULE,
@@ -31,6 +31,7 @@ function KindPill({ kind }: { kind: SessionKind }) {
 }
 
 export default function ScheduleRail() {
+  const [expanded, setExpanded] = useState(false)
   const [bookings, setBookings] = useState<Record<string, number>>(() =>
     Object.fromEntries(
       TODAY_SCHEDULE.filter((s) => s.classId).map((s) => [s.classId!, s.booked ?? 0]),
@@ -54,23 +55,39 @@ export default function ScheduleRail() {
   }
 
   return (
-    <section className="app-card p-6">
+    <section id="coach-schedule" className="app-card scroll-mt-24 p-6">
       <SectionHeader
         eyebrow="Today · Tuesday 12 May"
         title="Schedule"
         right={
-          <button
-            onClick={simulateBooking}
-            className="btn-ghost text-[11px]"
-            title="Mock booking simulation"
-          >
-            <Plus className="h-3.5 w-3.5" /> Simulate booking
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="btn-ghost text-[11px]"
+              aria-expanded={expanded}
+            >
+              <motion.span
+                animate={{ rotate: expanded ? 180 : 0 }}
+                transition={{ duration: 0.25 }}
+                className="inline-flex"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </motion.span>
+              {expanded ? 'See less' : 'See more'}
+            </button>
+            <button
+              onClick={simulateBooking}
+              className="btn-ghost text-[11px]"
+              title="Mock booking simulation"
+            >
+              <Plus className="h-3.5 w-3.5" /> Simulate booking
+            </button>
+          </div>
         }
       />
 
       <div className="relative">
-        {TODAY_SCHEDULE.map((s, i) => {
+        {(expanded ? TODAY_SCHEDULE : TODAY_SCHEDULE.slice(0, 4)).map((s, i) => {
           const showNow =
             timeToMinutes(s.time) > NOW_LABEL_MINUTES &&
             (i === 0 || timeToMinutes(TODAY_SCHEDULE[i - 1].time) <= NOW_LABEL_MINUTES)

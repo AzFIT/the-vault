@@ -175,7 +175,9 @@ export default function Coach() {
       </div>
 
       {/* Section 6 — revenue analytics */}
-      <RevenueAnalytics />
+      <div id="coach-revenue" className="scroll-mt-24">
+        <RevenueAnalytics />
+      </div>
 
       {/* Section 7 — quick actions */}
       <QuickActions onNewProgram={() => scrollToId('coach-builder')} />
