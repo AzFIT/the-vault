@@ -1,8 +1,9 @@
 import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
-import { Routes, Route } from 'react-router'
+import { Navigate, Routes, Route } from 'react-router'
 import Layout from './components/Layout'
 import AppShell from './components/AppShell'
+import PortalShell from './components/PortalShell'
 
 // Code-split pages — each route chunk loads on demand.
 const Home = lazy(() => import('./pages/Home'))
@@ -10,7 +11,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Sheets = lazy(() => import('./pages/Sheets'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const Coach = lazy(() => import('./pages/Coach'))
-const Manage = lazy(() => import('./pages/Manage'))
+const PortalOwner = lazy(() => import('./pages/PortalOwner'))
 const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -45,10 +46,17 @@ export default function App() {
         <Route path="/sheets" element={page(<Sheets />)} />
         <Route path="/analytics" element={page(<Analytics />)} />
         <Route path="/coach" element={page(<Coach />)} />
-        <Route path="/manage" element={page(<Manage />)} />
         <Route path="/plan-summary" element={page(<PlanSummary />)} />
         <Route path="/admin/enquiries" element={page(<Enquiries />)} />
       </Route>
+
+      {/* Owner portal — separate staff surface, owner-gated (tester sign-in) */}
+      <Route element={<PortalShell />}>
+        <Route path="/portal" element={page(<PortalOwner />)} />
+      </Route>
+
+      {/* Retired management view — graduated into the owner portal */}
+      <Route path="/manage" element={<Navigate to="/portal" replace />} />
 
       {/* Public client intake — no chrome, no login, shareable link */}
       <Route path="/intake" element={page(<Intake />)} />

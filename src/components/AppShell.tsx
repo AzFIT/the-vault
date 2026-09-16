@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   BarChart3,
   Bell,
-  Building2,
   FileText,
   Inbox,
   LayoutDashboard,
@@ -26,7 +25,6 @@ const NAV_ITEMS = [
   { to: '/sheets', label: 'Sheets', icon: Table2 },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/coach', label: 'Coach', icon: Users },
-  { to: '/manage', label: 'Management', icon: Building2 },
   { to: '/plan-summary', label: 'Plan Summary', icon: FileText },
 ]
 
@@ -35,7 +33,6 @@ const PAGE_META: Record<string, { eyebrow: string; title: string }> = {
   '/sheets': { eyebrow: 'Client View', title: 'Tracking Sheets' },
   '/analytics': { eyebrow: 'Client View', title: 'Analytics' },
   '/coach': { eyebrow: 'Coach View', title: 'Coach Dashboard' },
-  '/manage': { eyebrow: 'Staff', title: 'Management' },
   '/plan-summary': { eyebrow: 'Client View', title: 'Plan Summary' },
   '/admin/enquiries': { eyebrow: 'Staff', title: 'Enquiries Inbox' },
 }

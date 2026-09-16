@@ -34,7 +34,7 @@ export const STAFF_PROFILES: StaffProfile[] = [
     role: 'owner',
     roleLabel: 'Owner',
     tagline: 'Owner · Head Coach',
-    home: '/manage',
+    home: '/portal',
   },
   {
     id: 'rachel-cheung',
