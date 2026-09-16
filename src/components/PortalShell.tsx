@@ -163,10 +163,13 @@ export default function PortalShell() {
           <header className="sticky top-0 z-30 flex h-16 flex-wrap items-center gap-3 border-b border-vault-border bg-vault-bg/90 px-4 backdrop-blur-md md:px-8">
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-vault-muted">Staff</p>
-              <h1 className="text-lg font-bold leading-tight">Owner portal</h1>
+              <h1 className="text-lg font-bold leading-tight">Dashboard</h1>
             </div>
             <span className="ml-auto border border-gold/50 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-gold">
               Tester mode — signed in as {profile.name}
+            </span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted">
+              {profile.initials}
             </span>
           </header>
           <main className="mx-auto w-full max-w-[1280px] p-4 md:p-8">

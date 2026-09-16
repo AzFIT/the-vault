@@ -15,11 +15,12 @@ import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { asset } from '@/lib/utils'
-import { STAFF_PROFILES, signInAs } from '@/lib/staff'
+import { STAFF_PROFILES, getProfile, signInAs } from '@/lib/staff'
 
 export default function PortalLogin() {
   const navigate = useNavigate()
   const [selected, setSelected] = useState('rachel-cheung')
+  const selectedProfile = getProfile(selected)
 
   const enter = () => {
     const profile = signInAs(selected)
@@ -104,7 +105,7 @@ export default function PortalLogin() {
             onClick={enter}
             className="mt-6 flex w-full items-center justify-center gap-2 bg-white px-6 py-3.5 text-[12px] font-bold uppercase tracking-[0.14em] text-vault-btn-text transition-opacity hover:opacity-85"
           >
-            Enter portal <ArrowRight className="h-4 w-4" />
+            Enter as {selectedProfile?.name.split(' ')[0] ?? 'staff'} <ArrowRight className="h-4 w-4" />
           </button>
 
           <div className="mt-5 flex items-center justify-between">
