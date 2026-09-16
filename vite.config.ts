@@ -5,7 +5,8 @@ import { inspectAttr } from 'plugin-inspect-react-code'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './',
+  // './' for local dev; GitHub Pages workflow sets VITE_BASE=/the-vault/
+  base: process.env.VITE_BASE || './',
   plugins: [inspectAttr(), react()],
   server: {
     port: 3000,
