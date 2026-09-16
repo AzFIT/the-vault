@@ -349,3 +349,31 @@
     scroll-behavior: auto;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Print — trial summary / printable areas only. Everything else on the page
+ * is hidden via visibility so layout doesn't reflow; the print area is
+ * recoloured black-on-white for paper.
+ * ------------------------------------------------------------------------- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: #999999 !important;
+  }
+  .print-area * {
+    background: transparent !important;
+    color: #000000 !important;
+    border-color: #bbbbbb !important;
+  }
+}

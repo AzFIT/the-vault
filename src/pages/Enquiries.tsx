@@ -33,6 +33,7 @@ function timeAgo(iso: string): string {
 const CONTACT_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp',
   call: 'Phone call',
+  text: 'Text / SMS',
   email: 'Email',
 }
 
@@ -42,23 +43,28 @@ function payloadRows(e: Enquiry): { label: string; value: string }[] {
     name: 'Name',
     mobile: 'Mobile / WhatsApp',
     email: 'Email',
+    age: 'Age',
     preferredContact: 'Preferred contact',
     bestTime: 'Best time to reach',
     startDate: 'Preferred start date',
     trainedBefore: 'Trained at The Vault before',
     notes: 'Notes',
+    message: 'Message',
     trainingExperience: 'Training experience',
     goals: 'Main goals',
     personalTrainingInterest: 'PT interest',
     tourOrTrial: 'Tour or trial',
     preferredTrainingTimes: 'Preferred training times',
+    preferredTime: 'Preferred training time',
+    trialDays: 'Trial day(s)',
     injuries: 'Injuries / health',
     referredBy: 'Referred by',
     questions: 'Questions',
+    intake: 'Full intake file',
   }
   const rows: { label: string; value: string }[] = []
   for (const [k, v] of Object.entries(e.payload)) {
-    if (k === 'form' || k === 'planId') continue
+    if (k === 'form' || k === 'planId' || k === 'intake') continue
     if (v === null || v === undefined || v === '') continue
     if (Array.isArray(v) && v.length === 0) continue
     const label = LABELS[k] ?? k

@@ -9,9 +9,11 @@
  * coach. No data leaves the device; there is no backend yet.
  */
 import { useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
+import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Check, RotateCcw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarCheck, Check, CreditCard, Dumbbell, MessageCircle, Printer } from 'lucide-react'
+import { submitEnquiry } from '@/lib/enquiries'
 
 // ---------------------------------------------------------------------------
 // Field model
@@ -425,10 +427,517 @@ function FieldControl({
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// Intent chooser — what brings you to The Vault?
 // ---------------------------------------------------------------------------
 
-export default function Intake() {
+type IntakeMode = 'choose' | 'contact' | 'membership' | 'training' | 'trial'
+
+function IntentCard({
+  icon,
+  title,
+  desc,
+  onClick,
+}: {
+  icon: ReactNode
+  title: string
+  desc: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="app-card group flex w-full items-start gap-4 p-5 text-left transition-colors hover:border-white/40"
+    >
+      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border border-vault-border text-vault-muted transition-colors group-hover:border-white group-hover:text-white">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-bold text-white">{title}</span>
+        <span className="mt-1 block text-[13px] leading-relaxed text-vault-muted">{desc}</span>
+      </span>
+      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-vault-faint transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
+    </button>
+  )
+}
+
+function Chooser({ onPick }: { onPick: (m: Exclude<IntakeMode, 'choose'>) => void }) {
+  return (
+    <div className="space-y-3">
+      <IntentCard
+        icon={<MessageCircle className="h-4 w-4" strokeWidth={1.75} />}
+        title="Just get in touch"
+        desc="Quick contact — tell us how you'd like us to reach you (WhatsApp, call, or text) and we'll come back to you."
+        onClick={() => onPick('contact')}
+      />
+      <IntentCard
+        icon={<CreditCard className="h-4 w-4" strokeWidth={1.75} />}
+        title="Membership"
+        desc="Interested in a Vault membership — fill in the full intake so our team can prepare the right options for you."
+        onClick={() => onPick('membership')}
+      />
+      <IntentCard
+        icon={<Dumbbell className="h-4 w-4" strokeWidth={1.75} />}
+        title="Personal or group training"
+        desc="1-on-1 PT or small-group coaching — the intake helps us match you with the right coach and programme."
+        onClick={() => onPick('training')}
+      />
+      <IntentCard
+        icon={<CalendarCheck className="h-4 w-4" strokeWidth={1.75} />}
+        title="Book a trial session"
+        desc="A few quick questions about your training background and schedule — ends with a neat summary you can print or save."
+        onClick={() => onPick('trial')}
+      />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Short contact form — "just get in touch"
+// ---------------------------------------------------------------------------
+
+const PREF_OPTIONS = [
+  { id: 'whatsapp', label: 'WhatsApp me' },
+  { id: 'call', label: 'Call me' },
+  { id: 'text', label: 'Text me' },
+] as const
+
+function ContactForm() {
+  const [name, setName] = useState('')
+  const [mobile, setMobile] = useState('')
+  const [pref, setPref] = useState<string>('')
+  const [bestTime, setBestTime] = useState('')
+  const [message, setMessage] = useState('')
+  const [missing, setMissing] = useState<Set<string>>(new Set())
+  const [sent, setSent] = useState(false)
+  const [sending, setSending] = useState(false)
+
+  const valid = name.trim() !== '' && mobile.trim() !== '' && pref !== ''
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!valid) {
+      setMissing(
+        new Set(
+          [
+            !name.trim() && 'name',
+            !mobile.trim() && 'mobile',
+            !pref && 'pref',
+          ].filter(Boolean) as string[],
+        ),
+      )
+      return
+    }
+    setSending(true)
+    await submitEnquiry({
+      route: 'reception',
+      plan: 'general',
+      planLabel: 'General enquiry',
+      payload: {
+        name: name.trim(),
+        mobile: mobile.trim(),
+        preferredContact: pref,
+        bestTime: bestTime.trim(),
+        message: message.trim(),
+      },
+    })
+    setSending(false)
+    setSent(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  if (sent) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="app-card p-10 text-center">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
+          <Check className="h-8 w-8 text-vault-btn-text" strokeWidth={2.5} />
+        </span>
+        <h2 className="mt-6 text-2xl font-bold text-white">We'll be in touch</h2>
+        <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-vault-muted">
+          Your enquiry has gone to our front desk. We'll reach you via{' '}
+          <span className="font-bold text-white">{PREF_OPTIONS.find((p) => p.id === pref)?.label.replace(' me', '').toLowerCase()}</span>
+          {bestTime.trim() ? ` — best around ${bestTime.trim()}` : ''}.
+        </p>
+      </motion.div>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="app-card p-6 md:p-8">
+      <p className="eyebrow">Quick contact</p>
+      <h2 className="mt-2 text-xl font-bold text-white">How can we reach you?</h2>
+      <p className="mt-1.5 text-[13px] text-vault-muted">No long forms — just the essentials.</p>
+
+      <div className="mt-7 space-y-5">
+        <div>
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Full name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" className={inputCls(missing.has('name'))} />
+          {missing.has('name') && <p className="mt-1.5 text-[11px] text-[#ff6b6b]">This field is required</p>}
+        </div>
+        <div>
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Mobile / WhatsApp</label>
+          <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+852 0000 0000" className={inputCls(missing.has('mobile'))} />
+          {missing.has('mobile') && <p className="mt-1.5 text-[11px] text-[#ff6b6b]">This field is required</p>}
+        </div>
+        <div>
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">How should we contact you?</label>
+          <div className="flex flex-wrap gap-2">
+            {PREF_OPTIONS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={pref === p.id}
+                onClick={() => setPref(p.id)}
+                className={`border px-3.5 py-2 text-[13px] transition-colors ${
+                  pref === p.id
+                    ? 'border-white bg-white font-bold text-vault-btn-text'
+                    : 'border-vault-border bg-vault-bg text-vault-muted hover:border-white/60 hover:text-white'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {missing.has('pref') && <p className="mt-1.5 text-[11px] text-[#ff6b6b]">Please pick one</p>}
+        </div>
+        <div>
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Best time to reach you <span className="normal-case tracking-normal text-vault-faint">— optional</span></label>
+          <input value={bestTime} onChange={(e) => setBestTime(e.target.value)} placeholder="e.g. weekday evenings after 6pm" className={inputCls(false)} />
+        </div>
+        <div>
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Anything we should know? <span className="normal-case tracking-normal text-vault-faint">— optional</span></label>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} placeholder="Your question, goal, or what you're looking for…" className={`${inputCls(false)} resize-y`} />
+        </div>
+      </div>
+
+      <div className="mt-8 flex justify-end">
+        <button type="submit" disabled={sending} className="flex items-center gap-2 bg-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.12em] text-vault-btn-text transition-opacity hover:opacity-85 disabled:opacity-50">
+          {sending ? 'Sending…' : 'Send'} <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Trial flow — dynamic questions, neat printable summary
+// ---------------------------------------------------------------------------
+
+type TrialAnswers = {
+  trainedBefore?: string
+  goals?: string
+  injuries?: string
+  injuriesDetail?: string
+  preferredTime?: string
+  trialDays?: string[]
+  name?: string
+  mobile?: string
+  pref?: string
+}
+
+const TRIAL_STEPS = [
+  { key: 'trainedBefore', name: 'Training background', desc: 'Have you trained at a gym before?', kind: 'single' as const, options: ['Yes — I train regularly', 'Yes — on and off', 'No — brand new'] },
+  { key: 'goals', name: 'Your goal', desc: "What's the main thing you want from training?", kind: 'single' as const, options: ['Fat loss', 'Strength & muscle', 'General fitness', 'HYROX / conditioning'] },
+  { key: 'injuries', name: 'Injuries', desc: 'Anything we should work around?', kind: 'single' as const, options: ['No injuries', 'Yes — I have something to mention'] },
+  { key: 'preferredTime', name: 'Preferred time', desc: 'When do you usually like to train?', kind: 'single' as const, options: ['Morning · 6–10am', 'Midday · 12–2pm', 'Evening · 6–10pm'] },
+  { key: 'trialDays', name: 'Trial day', desc: 'Which days could you come in for a trial?', kind: 'multi' as const, options: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
+]
+
+function trialStepValid(key: string, a: TrialAnswers): boolean {
+  switch (key) {
+    case 'trainedBefore': return !!a.trainedBefore
+    case 'goals': return !!a.goals
+    case 'injuries': return !!a.injuries && (a.injuries === 'No injuries' || (a.injuriesDetail ?? '').trim() !== '')
+    case 'preferredTime': return !!a.preferredTime
+    case 'trialDays': return (a.trialDays?.length ?? 0) > 0
+    default: return true
+  }
+}
+
+function TrialFlow() {
+  const [idx, setIdx] = useState(0)
+  const [answers, setAnswers] = useState<TrialAnswers>({})
+  const [tried, setTried] = useState(false)
+  const [view, setView] = useState<'form' | 'summary' | 'sent'>('form')
+  const [sending, setSending] = useState(false)
+
+  const total = TRIAL_STEPS.length + 1 // + contact step
+  const isContactStep = idx === TRIAL_STEPS.length
+  const stepDef = isContactStep ? null : TRIAL_STEPS[idx]
+  const stepKey = stepDef?.key ?? 'contact'
+  const valid = isContactStep
+    ? !!answers.name?.trim() && !!answers.mobile?.trim() && !!answers.pref
+    : trialStepValid(stepKey, answers)
+
+  const set = (patch: Partial<TrialAnswers>) => setAnswers((prev) => ({ ...prev, ...patch }))
+
+  const next = () => {
+    if (!valid) {
+      setTried(true)
+      return
+    }
+    setTried(false)
+    if (isContactStep) {
+      setView('summary')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      setIdx(idx + 1)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
+  const back = () => {
+    setTried(false)
+    if (view === 'summary') {
+      setView('form')
+      setIdx(TRIAL_STEPS.length)
+    } else if (idx > 0) setIdx(idx - 1)
+  }
+
+  const send = async () => {
+    setSending(true)
+    await submitEnquiry({
+      route: 'reception',
+      plan: 'trial',
+      planLabel: 'Trial session',
+      payload: {
+        name: answers.name?.trim(),
+        mobile: answers.mobile?.trim(),
+        preferredContact: answers.pref,
+        trainedBefore: answers.trainedBefore,
+        goals: answers.goals,
+        injuries: answers.injuries === 'No injuries' ? 'No injuries' : answers.injuriesDetail?.trim(),
+        preferredTime: answers.preferredTime,
+        trialDays: answers.trialDays,
+      },
+    })
+    setSending(false)
+    setView('sent')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // ---- summary rows -------------------------------------------------------
+  const summaryRows: { label: string; value: string }[] = [
+    { label: 'Name', value: answers.name ?? '' },
+    { label: 'Mobile / WhatsApp', value: answers.mobile ?? '' },
+    { label: 'Preferred contact', value: PREF_OPTIONS.find((p) => p.id === answers.pref)?.label ?? '' },
+    { label: 'Training background', value: answers.trainedBefore ?? '' },
+    { label: 'Main goal', value: answers.goals ?? '' },
+    {
+      label: 'Injuries',
+      value: answers.injuries === 'No injuries' ? 'None' : (answers.injuriesDetail ?? ''),
+    },
+    { label: 'Preferred time', value: answers.preferredTime ?? '' },
+    { label: 'Trial day(s)', value: (answers.trialDays ?? []).join(', ') },
+  ]
+
+  // ---- sent ---------------------------------------------------------------
+  if (view === 'sent') {
+    return (
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="app-card p-10 text-center">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
+          <Check className="h-8 w-8 text-vault-btn-text" strokeWidth={2.5} />
+        </span>
+        <h2 className="mt-6 text-2xl font-bold text-white">Trial request sent</h2>
+        <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-vault-muted">
+          Our team will confirm your trial session shortly — watch your phone for a{' '}
+          {PREF_OPTIONS.find((p) => p.id === answers.pref)?.label.replace(' me', '').toLowerCase()}.
+        </p>
+      </motion.div>
+    )
+  }
+
+  // ---- summary ------------------------------------------------------------
+  if (view === 'summary') {
+    return (
+      <div>
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="app-card p-6 md:p-8">
+          <p className="eyebrow">Trial request · summary</p>
+          <h2 className="mt-2 text-xl font-bold text-white md:text-2xl">Your trial details</h2>
+          <p className="mt-1.5 text-[13px] text-vault-muted">
+            Check everything looks right — print or save a copy for yourself, then send it to us.
+          </p>
+
+          {/* Print area — the only thing visible on paper (see index.css) */}
+          <div className="print-area mt-6 border border-vault-border/70">
+            <div className="border-b border-vault-border/70 px-5 py-4">
+              <p className="font-serif text-lg font-bold">The Vault Fitness — Trial Request</p>
+              <p className="tnum text-[12px] opacity-70">{new Date().toLocaleString('en-GB')}</p>
+            </div>
+            <dl>
+              {summaryRows.map((r) => (
+                <div key={r.label} className="flex flex-wrap justify-between gap-x-6 gap-y-1 border-b border-vault-border/40 px-5 py-3 last:border-0">
+                  <dt className="text-[11px] uppercase tracking-[0.14em] opacity-70">{r.label}</dt>
+                  <dd className="text-right text-[14px] font-medium">{r.value || '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
+            <button type="button" onClick={back} className="btn-ghost">
+              <ArrowLeft className="h-3.5 w-3.5" /> Edit answers
+            </button>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => window.print()} className="btn-ghost">
+                <Printer className="h-3.5 w-3.5" /> Print / Save PDF
+              </button>
+              <button
+                type="button"
+                onClick={send}
+                disabled={sending}
+                className="flex items-center gap-2 bg-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.12em] text-vault-btn-text transition-opacity hover:opacity-85 disabled:opacity-50"
+              >
+                {sending ? 'Sending…' : 'Send to The Vault'} <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // ---- form ---------------------------------------------------------------
+  return (
+    <div className="app-card p-6 md:p-8">
+      {/* progress */}
+      <div className="mb-7">
+        <div className="mb-2 flex items-baseline justify-between text-[11px] uppercase tracking-[0.14em]">
+          <span className="text-white">
+            Step <span className="tnum font-bold">{idx + 1}</span> of <span className="tnum">{total}</span>
+          </span>
+          <span className="text-vault-muted">{isContactStep ? 'Contact' : stepDef!.name}</span>
+        </div>
+        <div className="h-1 w-full overflow-hidden" style={{ background: 'var(--viz-track)' }}>
+          <motion.div
+            className="h-full bg-white"
+            initial={false}
+            animate={{ width: `${((idx + 1) / total) * 100}%` }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          />
+        </div>
+      </div>
+
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={idx}
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -16 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+        >
+          {isContactStep ? (
+            <>
+              <p className="eyebrow">Contact</p>
+              <h2 className="mt-2 text-xl font-bold text-white">Where do we send the confirmation?</h2>
+              <div className="mt-6 space-y-5">
+                <div>
+                  <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Full name</label>
+                  <input value={answers.name ?? ''} onChange={(e) => set({ name: e.target.value })} placeholder="Jane Doe" className={inputCls(tried && !answers.name?.trim())} />
+                </div>
+                <div>
+                  <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Mobile / WhatsApp</label>
+                  <input value={answers.mobile ?? ''} onChange={(e) => set({ mobile: e.target.value })} placeholder="+852 0000 0000" className={inputCls(tried && !answers.mobile?.trim())} />
+                </div>
+                <div>
+                  <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Confirm via</label>
+                  <div className="flex flex-wrap gap-2">
+                    {PREF_OPTIONS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={answers.pref === p.id}
+                        onClick={() => set({ pref: p.id })}
+                        className={`border px-3.5 py-2 text-[13px] transition-colors ${
+                          answers.pref === p.id
+                            ? 'border-white bg-white font-bold text-vault-btn-text'
+                            : 'border-vault-border bg-vault-bg text-vault-muted hover:border-white/60 hover:text-white'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="eyebrow">{stepDef!.name}</p>
+              <h2 className="mt-2 text-xl font-bold text-white">{stepDef!.desc}</h2>
+              <div className="mt-6 flex flex-wrap gap-2">
+                {stepDef!.options.map((o) => {
+                  const active =
+                    stepDef!.kind === 'single'
+                      ? answers[stepKey as keyof TrialAnswers] === o
+                      : Array.isArray(answers[stepKey as keyof TrialAnswers]) &&
+                        (answers[stepKey as keyof TrialAnswers] as string[]).includes(o)
+                  return (
+                    <button
+                      key={o}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => {
+                        if (stepDef!.kind === 'single') set({ [stepKey]: o } as Partial<TrialAnswers>)
+                        else {
+                          const arr = Array.isArray(answers[stepKey as keyof TrialAnswers])
+                            ? (answers[stepKey as keyof TrialAnswers] as string[])
+                            : []
+                          set({
+                            [stepKey]: active ? arr.filter((x) => x !== o) : [...arr, o],
+                          } as Partial<TrialAnswers>)
+                        }
+                      }}
+                      className={`border px-3.5 py-2 text-[13px] transition-colors ${
+                        active
+                          ? 'border-white bg-white font-bold text-vault-btn-text'
+                          : 'border-vault-border bg-vault-bg text-vault-muted hover:border-white/60 hover:text-white'
+                      }`}
+                    >
+                      {o}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Conditional follow-up: injuries detail */}
+              {stepKey === 'injuries' && answers.injuries === 'Yes — I have something to mention' && (
+                <div className="mt-5">
+                  <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Tell us what's going on</label>
+                  <textarea
+                    value={answers.injuriesDetail ?? ''}
+                    onChange={(e) => set({ injuriesDetail: e.target.value })}
+                    rows={3}
+                    placeholder="e.g. left knee pain when squatting, lower back tightness…"
+                    className={`${inputCls(tried && !(answers.injuriesDetail ?? '').trim())} resize-y`}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {tried && !valid && (
+            <p className="mt-5 text-[12px] text-[#ff6b6b]">Please answer this step to continue.</p>
+          )}
+
+          <div className="mt-8 flex items-center justify-between gap-3">
+            <button type="button" onClick={back} disabled={idx === 0} className="btn-ghost disabled:opacity-30">
+              <ArrowLeft className="h-3.5 w-3.5" /> Previous
+            </button>
+            <button type="button" onClick={next} className="flex items-center gap-2 bg-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.12em] text-vault-btn-text transition-opacity hover:opacity-85">
+              {isContactStep ? 'Review summary' : 'Next'} <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Full intake wizard (10 steps) — used for membership and PT/group training
+// ---------------------------------------------------------------------------
+
+function IntakeWizard({ tag }: { tag: 'membership' | 'training' }) {
   const [stepIdx, setStepIdx] = useState(0)
   const [values, setValues] = useState<Values>(initValues)
   const [submitted, setSubmitted] = useState(false)
@@ -497,24 +1006,161 @@ export default function Intake() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+
+    // Mirror the submission into the enquiries CRM so the team can act on it.
+    const basics = client.basics as Record<string, unknown> | undefined
+    const goals = client.goals as Record<string, unknown> | undefined
+    void submitEnquiry({
+      route: 'senior',
+      plan: tag,
+      planLabel: tag === 'membership' ? 'Membership intake' : 'PT / Group training intake',
+      payload: {
+        name: basics?.name,
+        email: basics?.email,
+        mobile: basics?.phone,
+        age: basics?.age,
+        goals: goals?.primary_goal,
+        intake: data,
+      },
+    })
+
     setSubmitted(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const restart = () => {
-    setValues(initValues())
-    setStepIdx(0)
-    setSubmitted(false)
-    setShowError(false)
-    setMissing(new Set())
-    window.scrollTo({ top: 0 })
+  const progress = submitted ? 100 : ((stepIdx + 1) / total) * 100
+
+  if (submitted) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+        className="app-card p-10 text-center"
+      >
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
+          <Check className="h-8 w-8 text-vault-btn-text" strokeWidth={2.5} />
+        </span>
+        <h2 className="mt-6 text-2xl font-bold text-white">You're all set!</h2>
+        <p className="mx-auto mt-3 max-w-md text-[14px] leading-relaxed text-vault-muted">
+          Your intake file has been downloaded and sent to our team — we'll be in touch to arrange
+          your <span className="font-bold text-white">{tag === 'membership' ? 'membership' : 'training'}</span>{' '}
+          consultation. Keep the{' '}
+          <span className="font-bold text-white">client_intake.azfit</span> file for your records.
+        </p>
+      </motion.div>
+    )
   }
 
-  const progress = submitted ? 100 : ((stepIdx + 1) / total) * 100
+  return (
+    <div>
+      {/* Progress */}
+      <div className="mb-8">
+        <div className="mb-2 flex items-baseline justify-between text-[11px] uppercase tracking-[0.14em]">
+          <span className="text-white">
+            Step <span className="tnum font-bold">{stepIdx + 1}</span> of <span className="tnum">{total}</span>
+          </span>
+          <span className="text-vault-muted">{step.name}</span>
+        </div>
+        <div className="h-1 w-full overflow-hidden" style={{ background: 'var(--viz-track)' }}>
+          <motion.div
+            className="h-full bg-white"
+            initial={false}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          />
+        </div>
+      </div>
+
+      <form onSubmit={submit} noValidate>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={stepIdx}
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="app-card p-6 md:p-8"
+          >
+            <p className="eyebrow">{String(stepIdx + 1).padStart(2, '0')} · {step.name}</p>
+            <h2 className="mt-2 text-xl font-bold text-white md:text-2xl">{step.name}</h2>
+            <p className="mt-1.5 text-[13px] text-vault-muted">{step.desc}</p>
+
+            <div className="mt-7 grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {step.fields.map((f) => (
+                <FieldShell key={f.name} field={f} invalid={missing.has(f.name)}>
+                  <FieldControl field={f} value={values[f.name]} invalid={missing.has(f.name)} onChange={(v) => set(f.name, v)} />
+                </FieldShell>
+              ))}
+            </div>
+
+            {/* Step navigation */}
+            <div className="mt-9 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => go(stepIdx - 1)}
+                disabled={stepIdx === 0}
+                className="btn-ghost disabled:opacity-30"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Previous
+              </button>
+              <div className="flex flex-col items-end gap-2">
+                {showError && !valid && (
+                  <span className="text-[12px] text-[#ff6b6b]">Please fill in the required fields.</span>
+                )}
+                {isLast ? (
+                  <button type="submit" className="flex items-center gap-2 bg-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.12em] text-vault-btn-text transition-opacity hover:opacity-85">
+                    Submit <Check className="h-4 w-4" strokeWidth={2.5} />
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => go(stepIdx + 1)} className="flex items-center gap-2 bg-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.12em] text-vault-btn-text transition-opacity hover:opacity-85">
+                    Next <ArrowRight className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </form>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page — intent chooser routes each visitor to the right form
+// ---------------------------------------------------------------------------
+
+const MODE_SUBTITLES: Record<IntakeMode, string> = {
+  choose: 'Pick what brings you here — we\u2019ll show you the right form.',
+  contact: 'Quick contact — no long forms.',
+  membership: 'Membership intake · ten short steps.',
+  training: 'Personal & group training intake · ten short steps.',
+  trial: 'Trial session · a few quick questions, then a printable summary.',
+}
+
+export default function Intake() {
+  const [mode, setMode] = useState<IntakeMode>('choose')
+
+  const backToChooser = () => {
+    setMode('choose')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="min-h-dvh px-4 py-10 md:py-16">
       <div className="mx-auto max-w-2xl">
+        {/* Top bar — back to the marketing homepage + back to options */}
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <Link to="/" className="btn-ghost !py-1.5 text-[11px]">
+            <ArrowLeft className="h-3.5 w-3.5" /> Homepage
+          </Link>
+          {mode !== 'choose' && (
+            <button type="button" onClick={backToChooser} className="btn-ghost !py-1.5 text-[11px]">
+              All options
+            </button>
+          )}
+        </div>
+
         {/* Brand */}
         <header className="mb-10 text-center">
           <img
@@ -528,101 +1174,25 @@ export default function Intake() {
           <h1 className="mt-2 font-serif text-3xl font-bold text-white md:text-4xl">
             Let's build your plan.
           </h1>
-          <p className="mt-2 text-[13px] text-vault-muted">
-            Ten short steps · everything stays between you and your coach
-          </p>
+          <p className="mt-2 text-[13px] text-vault-muted">{MODE_SUBTITLES[mode]}</p>
         </header>
 
-        {/* Progress */}
-        <div className="mb-8">
-          <div className="mb-2 flex items-baseline justify-between text-[11px] uppercase tracking-[0.14em]">
-            <span className="text-white">
-              Step <span className="tnum font-bold">{submitted ? total : stepIdx + 1}</span> of <span className="tnum">{total}</span>
-            </span>
-            <span className="text-vault-muted">{submitted ? 'Complete' : step.name}</span>
-          </div>
-          <div className="h-1 w-full overflow-hidden" style={{ background: 'var(--viz-track)' }}>
-            <motion.div
-              className="h-full bg-white"
-              initial={false}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.4, ease: 'easeOut' }}
-            />
-          </div>
-        </div>
-
-        {submitted ? (
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            key={mode}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: 'easeOut' }}
-            className="app-card p-10 text-center"
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
           >
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
-              <Check className="h-8 w-8 text-vault-btn-text" strokeWidth={2.5} />
-            </span>
-            <h2 className="mt-6 text-2xl font-bold text-white">You're all set!</h2>
-            <p className="mx-auto mt-3 max-w-md text-[14px] leading-relaxed text-vault-muted">
-              Your intake file has been downloaded. Send the{' '}
-              <span className="font-bold text-white">client_intake.azfit</span> file to your Vault
-              coach to get started.
-            </p>
-            <button type="button" onClick={restart} className="btn-ghost mx-auto mt-8">
-              <RotateCcw className="h-3.5 w-3.5" /> Fill another form
-            </button>
+            {mode === 'choose' && (
+              <Chooser onPick={(m) => { setMode(m); window.scrollTo({ top: 0 }) }} />
+            )}
+            {mode === 'contact' && <ContactForm />}
+            {(mode === 'membership' || mode === 'training') && <IntakeWizard key={mode} tag={mode} />}
+            {mode === 'trial' && <TrialFlow />}
           </motion.div>
-        ) : (
-          <form onSubmit={submit} noValidate>
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={stepIdx}
-                initial={{ opacity: 0, x: 16 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -16 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className="app-card p-6 md:p-8"
-              >
-                <p className="eyebrow">{String(stepIdx + 1).padStart(2, '0')} · {step.name}</p>
-                <h2 className="mt-2 text-xl font-bold text-white md:text-2xl">{step.name}</h2>
-                <p className="mt-1.5 text-[13px] text-vault-muted">{step.desc}</p>
-
-                <div className="mt-7 grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  {step.fields.map((f) => (
-                    <FieldShell key={f.name} field={f} invalid={missing.has(f.name)}>
-                      <FieldControl field={f} value={values[f.name]} invalid={missing.has(f.name)} onChange={(v) => set(f.name, v)} />
-                    </FieldShell>
-                  ))}
-                </div>
-
-                {/* Step navigation */}
-                <div className="mt-9 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => go(stepIdx - 1)}
-                    disabled={stepIdx === 0}
-                    className="btn-ghost disabled:opacity-30"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5" /> Previous
-                  </button>
-                  <div className="flex flex-col items-end gap-2">
-                    {showError && !valid && (
-                      <span className="text-[12px] text-[#ff6b6b]">Please fill in the required fields.</span>
-                    )}
-                    {isLast ? (
-                      <button type="submit" className="flex items-center gap-2 bg-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.12em] text-vault-btn-text transition-opacity hover:opacity-85">
-                        Submit <Check className="h-4 w-4" strokeWidth={2.5} />
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => go(stepIdx + 1)} className="flex items-center gap-2 bg-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-[0.12em] text-vault-btn-text transition-opacity hover:opacity-85">
-                        Next <ArrowRight className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </form>
-        )}
+        </AnimatePresence>
 
         <p className="mt-8 text-center text-[11px] text-vault-faint">
           The Vault Fitness © 2026 — Confidential client intake. Your data stays with your coach.
@@ -631,3 +1201,4 @@ export default function Intake() {
     </div>
   )
 }
+
