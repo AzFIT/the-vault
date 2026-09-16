@@ -10,6 +10,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Sheets = lazy(() => import('./pages/Sheets'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const Coach = lazy(() => import('./pages/Coach'))
+const Manage = lazy(() => import('./pages/Manage'))
 const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/sheets" element={page(<Sheets />)} />
         <Route path="/analytics" element={page(<Analytics />)} />
         <Route path="/coach" element={page(<Coach />)} />
+        <Route path="/manage" element={page(<Manage />)} />
         <Route path="/plan-summary" element={page(<PlanSummary />)} />
         <Route path="/admin/enquiries" element={page(<Enquiries />)} />
       </Route>
