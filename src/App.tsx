@@ -13,6 +13,7 @@ const Coach = lazy(() => import('./pages/Coach'))
 const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
+const Intake = lazy(() => import('./pages/Intake'))
 
 /** Centered gold spinner while a route chunk loads. */
 function PageFallback() {
@@ -44,6 +45,9 @@ export default function App() {
         <Route path="/plan-summary" element={page(<PlanSummary />)} />
         <Route path="/admin/enquiries" element={page(<Enquiries />)} />
       </Route>
+
+      {/* Public client intake — no chrome, no login, shareable link */}
+      <Route path="/intake" element={page(<Intake />)} />
     </Routes>
   )
 }
