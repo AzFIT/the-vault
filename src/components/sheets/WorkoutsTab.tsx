@@ -445,9 +445,8 @@ export default function WorkoutsTab({
     if (planned) metas.push(planned)
   }
 
-  const [openKey, setOpenKey] = useState<string | null>(
-    isLatest ? PLANNED_SESSION_KEY : (metas[0]?.key ?? null),
-  )
+  // All session panels start collapsed — the coach expands the day they need.
+  const [openKey, setOpenKey] = useState<string | null>(null)
   // Each SessionPanel registers its own add-set handler here so the toolbar
   // "Add row" duplicates the row focused inside that panel.
   const addSetHandlers = useRef(new Map<string, () => void>())
