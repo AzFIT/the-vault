@@ -4,11 +4,15 @@ This folder is a complete, verified-working copy of the project:
 
 - **Full source** (`src/`, `public/`, configs) — build-tested, lint-clean
 - **`dist/`** — the latest production build (ready to deploy as-is)
-- **`docs/`** — wireframe workflow pack + original site research
+- **`docs/`** — the production build committed for GitHub Pages (deploy source: `main /docs`)
+- **`project-docs/`** — wireframe workflow pack + original site research
 - **`.gitignore`** — already set up (excludes `node_modules/`, `dist/`, `.env`)
 
-> Note: `dist/` is gitignored by default. If you want the build stored in
-> GitHub too, remove the `dist/` line from `.gitignore` before committing.
+> Note: `dist/` is gitignored by default. The live site is served from
+> `docs/` instead — the "Build site to docs/" workflow rebuilds it
+> automatically on every push to `main` and commits the result.
+> Project documentation lives in `project-docs/` (moved out of `docs/`
+> when the deploy source switched to the /docs folder).
 
 ## Option A — GitHub website (no command line)
 

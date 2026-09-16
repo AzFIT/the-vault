@@ -1,18 +1,18 @@
-name: Deploy to GitHub Pages
+name: Build site to docs/
+
+# Pages is configured to deploy from the /docs folder on main.
+# This workflow rebuilds the production bundle on every push to main
+# and commits it to docs/, so the live site always tracks the code.
+# It pushes with [skip ci] and ignores docs/** pushes to avoid loops.
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+    paths-ignore:
+      - 'docs/**'
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  contents: write
 
 jobs:
   build:
@@ -35,21 +35,22 @@ jobs:
         env:
           VITE_BASE: /the-vault/
 
-      - name: Add SPA fallback (404.html)
-        run: cp dist/index.html dist/404.html
+      - name: Stage build into docs/
+        run: |
+          cp dist/index.html dist/404.html   # SPA fallback for deep links
+          rm -rf docs
+          mkdir docs
+          cp -r dist/. docs/
+          touch docs/.nojekyll               # serve files as-is, no Jekyll
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Commit and push docs/
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --staged --quiet; then
+            echo "docs/ unchanged"
+          else
+            git commit -m "Build site to docs/ [skip ci]"
+            git push
+          fi
