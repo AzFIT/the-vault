@@ -502,17 +502,56 @@ const PREF_OPTIONS = [
   { id: 'text', label: 'Text me' },
 ] as const
 
+const DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const
+
+const TIME_OPTIONS = [
+  { id: 'morning', label: 'Morning', hint: '7–11am' },
+  { id: 'lunch', label: 'Lunch', hint: '12–2pm' },
+  { id: 'afternoon', label: 'Afternoon', hint: '2–5pm' },
+  { id: 'late-afternoon', label: 'Late afternoon', hint: '5–7pm' },
+  { id: 'evening', label: 'Evening', hint: 'after 7pm' },
+] as const
+
+/** Toggle membership for chip-style multi-selects. */
+function toggle(list: string[], id: string): string[] {
+  return list.includes(id) ? list.filter((x) => x !== id) : [...list, id]
+}
+
 function ContactForm() {
   const [name, setName] = useState('')
   const [mobile, setMobile] = useState('')
-  const [pref, setPref] = useState<string>('')
-  const [bestTime, setBestTime] = useState('')
+  const [prefs, setPrefs] = useState<string[]>([])
+  const [weekdays, setWeekdays] = useState(false)
+  const [days, setDays] = useState<string[]>([...DAY_OPTIONS])
+  const [times, setTimes] = useState<string[]>([])
   const [message, setMessage] = useState('')
   const [missing, setMissing] = useState<Set<string>>(new Set())
   const [sent, setSent] = useState(false)
   const [sending, setSending] = useState(false)
 
-  const valid = name.trim() !== '' && mobile.trim() !== '' && pref !== ''
+  const valid = name.trim() !== '' && mobile.trim() !== '' && prefs.length > 0
+
+  // Human-readable best time, e.g. "Weekdays (Mon, Wed, Fri) · morning, evening"
+  const bestTime = useMemo(() => {
+    const parts: string[] = []
+    if (weekdays) {
+      parts.push(
+        days.length === DAY_OPTIONS.length
+          ? 'weekdays (Mon–Fri)'
+          : days.length > 0
+            ? `weekdays (${days.join(', ')})`
+            : 'weekdays',
+      )
+    }
+    if (times.length > 0) {
+      parts.push(
+        TIME_OPTIONS.filter((t) => times.includes(t.id))
+          .map((t) => t.label.toLowerCase())
+          .join(', '),
+      )
+    }
+    return parts.join(' · ')
+  }, [weekdays, days, times])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -522,7 +561,7 @@ function ContactForm() {
           [
             !name.trim() && 'name',
             !mobile.trim() && 'mobile',
-            !pref && 'pref',
+            prefs.length === 0 && 'pref',
           ].filter(Boolean) as string[],
         ),
       )
@@ -536,8 +575,8 @@ function ContactForm() {
       payload: {
         name: name.trim(),
         mobile: mobile.trim(),
-        preferredContact: pref,
-        bestTime: bestTime.trim(),
+        preferredContact: prefs,
+        bestTime,
         message: message.trim(),
       },
     })
@@ -547,6 +586,10 @@ function ContactForm() {
   }
 
   if (sent) {
+    const via = prefs
+      .map((p) => PREF_OPTIONS.find((o) => o.id === p)?.label.replace(' me', '').toLowerCase())
+      .filter(Boolean)
+      .join(' or ')
     return (
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="app-card p-10 text-center">
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
@@ -555,8 +598,8 @@ function ContactForm() {
         <h2 className="mt-6 text-2xl font-bold text-white">We'll be in touch</h2>
         <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-vault-muted">
           Your enquiry has gone to our front desk. We'll reach you via{' '}
-          <span className="font-bold text-white">{PREF_OPTIONS.find((p) => p.id === pref)?.label.replace(' me', '').toLowerCase()}</span>
-          {bestTime.trim() ? ` — best around ${bestTime.trim()}` : ''}.
+          <span className="font-bold text-white">{via}</span>
+          {bestTime ? <> — best time: <span className="font-bold text-white">{bestTime}</span></> : ''}.
         </p>
       </motion.div>
     )
@@ -580,16 +623,26 @@ function ContactForm() {
           {missing.has('mobile') && <p className="mt-1.5 text-[11px] text-[#ff6b6b]">This field is required</p>}
         </div>
         <div>
-          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">How should we contact you?</label>
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">
+            How should we contact you?{' '}
+            <span className="normal-case tracking-normal text-vault-faint">— tick all that apply</span>
+          </label>
           <div className="flex flex-wrap gap-2">
             {PREF_OPTIONS.map((p) => (
               <button
                 key={p.id}
                 type="button"
-                aria-pressed={pref === p.id}
-                onClick={() => setPref(p.id)}
+                aria-pressed={prefs.includes(p.id)}
+                onClick={() => {
+                  setPrefs((cur) => toggle(cur, p.id))
+                  setMissing((m) => {
+                    const next = new Set(m)
+                    next.delete('pref')
+                    return next
+                  })
+                }}
                 className={`border px-3.5 py-2 text-[13px] transition-colors ${
-                  pref === p.id
+                  prefs.includes(p.id)
                     ? 'border-white bg-white font-bold text-vault-btn-text'
                     : 'border-vault-border bg-vault-bg text-vault-muted hover:border-white/60 hover:text-white'
                 }`}
@@ -598,11 +651,69 @@ function ContactForm() {
               </button>
             ))}
           </div>
-          {missing.has('pref') && <p className="mt-1.5 text-[11px] text-[#ff6b6b]">Please pick one</p>}
+          {missing.has('pref') && <p className="mt-1.5 text-[11px] text-[#ff6b6b]">Please pick at least one</p>}
         </div>
         <div>
-          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Best time to reach you <span className="normal-case tracking-normal text-vault-faint">— optional</span></label>
-          <input value={bestTime} onChange={(e) => setBestTime(e.target.value)} placeholder="e.g. weekday evenings after 6pm" className={inputCls(false)} />
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">
+            Best time to reach you{' '}
+            <span className="normal-case tracking-normal text-vault-faint">— optional, tick all that apply</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              aria-pressed={weekdays}
+              onClick={() => setWeekdays((w) => !w)}
+              className={`border px-3.5 py-2 text-[13px] transition-colors ${
+                weekdays
+                  ? 'border-white bg-white font-bold text-vault-btn-text'
+                  : 'border-vault-border bg-vault-bg text-vault-muted hover:border-white/60 hover:text-white'
+              }`}
+            >
+              Weekdays
+            </button>
+          </div>
+          {weekdays && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              className="mt-2 flex flex-wrap items-center gap-2 border-l-2 border-gold/50 pl-3"
+            >
+              <span className="text-[11px] uppercase tracking-[0.12em] text-vault-faint">Which days?</span>
+              {DAY_OPTIONS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={days.includes(d)}
+                  onClick={() => setDays((cur) => toggle(cur, d))}
+                  className={`border px-2.5 py-1.5 text-[12px] transition-colors ${
+                    days.includes(d)
+                      ? 'border-white bg-white font-bold text-vault-btn-text'
+                      : 'border-vault-border bg-vault-bg text-vault-muted hover:border-white/60 hover:text-white'
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </motion.div>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {TIME_OPTIONS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={times.includes(t.id)}
+                onClick={() => setTimes((cur) => toggle(cur, t.id))}
+                className={`border px-3.5 py-2 text-[13px] transition-colors ${
+                  times.includes(t.id)
+                    ? 'border-white bg-white font-bold text-vault-btn-text'
+                    : 'border-vault-border bg-vault-bg text-vault-muted hover:border-white/60 hover:text-white'
+                }`}
+              >
+                {t.label} <span className={`ml-1 text-[10px] ${times.includes(t.id) ? 'opacity-70' : 'text-vault-faint'}`}>{t.hint}</span>
+              </button>
+            ))}
+          </div>
         </div>
         <div>
           <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Anything we should know? <span className="normal-case tracking-normal text-vault-faint">— optional</span></label>

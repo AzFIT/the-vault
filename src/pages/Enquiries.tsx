@@ -37,6 +37,13 @@ const CONTACT_LABELS: Record<string, string> = {
   email: 'Email',
 }
 
+/** Preferred contact may be a single id or an array of ids (quick contact allows several). */
+function contactLabel(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—'
+  const ids = Array.isArray(v) ? v : [String(v)]
+  return ids.map((id) => CONTACT_LABELS[String(id)] ?? String(id)).join(' · ') || '—'
+}
+
 /** Prettify a form payload into labelled rows, skipping internal keys. */
 function payloadRows(e: Enquiry): { label: string; value: string }[] {
   const LABELS: Record<string, string> = {
@@ -69,8 +76,8 @@ function payloadRows(e: Enquiry): { label: string; value: string }[] {
     if (Array.isArray(v) && v.length === 0) continue
     const label = LABELS[k] ?? k
     let value: string
-    if (Array.isArray(v)) value = v.join(', ')
-    else if (k === 'preferredContact') value = CONTACT_LABELS[String(v)] ?? String(v)
+    if (k === 'preferredContact') value = contactLabel(v)
+    else if (Array.isArray(v)) value = v.join(', ')
     else if (typeof v === 'string' && (v === 'yes' || v === 'no')) value = v === 'yes' ? 'Yes' : 'No'
     else value = String(v)
     rows.push({ label, value })
@@ -222,7 +229,7 @@ export default function Enquiries() {
               </div>
               <RoutePill route={e.route} />
               <span className="text-[12px] text-vault-muted">
-                {CONTACT_LABELS[String(e.payload.preferredContact)] ?? '—'}
+                {contactLabel(e.payload.preferredContact)}
               </span>
               <span className="tnum text-[12px] text-vault-faint">{timeAgo(e.createdAt)}</span>
             </motion.button>
