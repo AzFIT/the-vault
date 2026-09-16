@@ -3,3 +3,6 @@ dist/
 .env
 .DS_Store
 *.local
+
+# Private working files — never push (API keys live in _PRIVATE, outside this repo)
+.temp/
