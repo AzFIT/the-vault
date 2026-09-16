@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { asset } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   BarChart3,
@@ -71,7 +72,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-vault-border px-5">
-        <img src="/logo-gold.png" alt="The Vault" className="h-9 w-9 object-contain" />
+        <img src={asset('logo-gold.png')} alt="The Vault" className="h-9 w-9 object-contain" />
         <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>
       </div>
 

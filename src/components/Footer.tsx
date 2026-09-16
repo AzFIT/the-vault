@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router'
 import { Facebook, Instagram, MapPin, Phone } from 'lucide-react'
+import { asset } from '@/lib/utils'
 import { toast } from 'sonner'
 import { isEmail } from '@/lib/validation'
 import { subscribeNewsletter } from '@/lib/enquiries'
@@ -46,7 +47,7 @@ export default function Footer() {
       <div className="mx-auto grid max-w-[1600px] gap-12 px-5 py-16 md:grid-cols-2 lg:grid-cols-4 lg:gap-8 lg:px-8 lg:py-20">
         {/* 1 — Location block */}
         <div>
-          <img src="/logo-gold.png" alt="The Vault Fitness" className="mb-6 h-12 w-auto" />
+          <img src={asset('logo-gold.png')} alt="The Vault Fitness" className="mb-6 h-12 w-auto" />
           <ul className="space-y-3 text-[13px] leading-relaxed text-vault-muted">
             <li className="flex gap-2.5">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0" />

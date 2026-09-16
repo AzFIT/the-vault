@@ -4,6 +4,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { Star } from 'lucide-react'
+import { asset } from '@/lib/utils'
 import {
   membershipPlans,
   introPackage,
@@ -124,7 +125,7 @@ function Hero() {
     <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden">
       <div className="absolute inset-0">
         <img
-          src="/hero-home.jpg"
+          src={asset('hero-home.jpg')}
           alt="Coach guiding a deadlift at The Vault Fitness"
           className="kenburns h-full w-full object-cover"
         />
@@ -189,28 +190,28 @@ function BrandStatement() {
 /* ------------------------------------------------------------------ */
 const SERVICES = [
   {
-    img: '/card-pt.jpg',
+    img: asset('card-pt.jpg'),
     eyebrow: '1:1 Coaching',
     title: 'Personal Training',
     link: 'Start training →',
     anchor: 'personal-training',
   },
   {
-    img: '/card-classes.jpg',
+    img: asset('card-classes.jpg'),
     eyebrow: 'Small Group · Max 6',
     title: 'Group Classes',
     link: 'Learn more →',
     anchor: 'group-classes',
   },
   {
-    img: '/card-womens.jpg',
+    img: asset('card-womens.jpg'),
     eyebrow: 'Pre & Postnatal · Menopause',
     title: "Women's Health",
     link: 'Learn more →',
     anchor: 'womens-health',
   },
   {
-    img: '/card-membership.jpg',
+    img: asset('card-membership.jpg'),
     eyebrow: 'No Contract · No Joining Fees',
     title: 'Memberships',
     link: 'Access gym →',
@@ -273,7 +274,7 @@ function Facilities() {
       <div className="flex flex-col lg:flex-row">
         <div className="relative min-h-[50vh] overflow-hidden lg:min-h-[70vh] lg:w-[55%]">
           <img
-            src="/gym-facilities.jpg"
+            src={asset('gym-facilities.jpg')}
             alt="The Vault Fitness gym floor"
             loading="lazy"
             className="facilities-img absolute inset-0 h-[120%] w-full object-cover"
@@ -317,7 +318,7 @@ function VipStudio() {
   return (
     <section id="vip" className="relative flex min-h-[80vh] items-center overflow-hidden">
       <img
-        src="/vip-studio.jpg"
+        src={asset('vip-studio.jpg')}
         alt="Hong Kong's first VIP personal training studio"
         loading="lazy"
         className="absolute inset-0 h-full w-full object-cover"
@@ -488,7 +489,7 @@ function GroupClasses() {
         className="pointer-events-none absolute inset-y-0 right-0 hidden w-2/5 opacity-40 lg:block"
         aria-hidden
       >
-        <img src="/card-classes.jpg" alt="" loading="lazy" className="h-full w-full object-cover" />
+        <img src={asset('card-classes.jpg')} alt="" loading="lazy" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-vault-bg via-vault-bg/40 to-transparent" />
       </div>
 
@@ -537,7 +538,7 @@ function WomensHealth() {
   return (
     <section id="womens-health" className="relative flex min-h-[70vh] items-end overflow-hidden">
       <img
-        src="/card-womens.jpg"
+        src={asset('card-womens.jpg')}
         alt="Women training at The Vault"
         loading="lazy"
         className="womens-bg absolute inset-0 h-[115%] w-full object-cover"
@@ -731,7 +732,7 @@ function Location() {
         </div>
         <div className="location-img-wrap overflow-hidden">
           <img
-            src="/entrance.jpg"
+            src={asset('entrance.jpg')}
             alt="The Vault Fitness reception"
             loading="lazy"
             className="location-img h-[40vh] w-full object-cover lg:h-[60vh]"
