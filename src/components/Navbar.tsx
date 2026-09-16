@@ -64,6 +64,12 @@ export default function Navbar() {
 
         <div className="absolute right-4 flex items-center gap-5 md:right-5">
           <Link
+            to="/portal/login"
+            className="hidden text-[13px] uppercase tracking-[0.12em] text-vault-muted transition-colors hover:text-white md:inline"
+          >
+            Staff
+          </Link>
+          <Link
             to="/dashboard"
             className="hidden text-[13px] uppercase tracking-[0.12em] text-vault-muted transition-colors hover:text-white md:inline"
           >
@@ -131,6 +137,13 @@ export default function Navbar() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.06 * NAV_LINKS.length, duration: 0.4 }}
               >
+                <Link
+                  to="/portal/login"
+                  onClick={() => setOpen(false)}
+                  className="mt-6 block text-3xl font-bold text-gold"
+                >
+                  Staff
+                </Link>
                 <Link
                   to="/dashboard"
                   onClick={() => setOpen(false)}

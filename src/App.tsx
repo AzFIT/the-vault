@@ -15,6 +15,8 @@ const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Intake = lazy(() => import('./pages/Intake'))
+const PortalLogin = lazy(() => import('./pages/PortalLogin'))
+const FrontDesk = lazy(() => import('./pages/FrontDesk'))
 
 /** Centered gold spinner while a route chunk loads. */
 function PageFallback() {
@@ -50,6 +52,10 @@ export default function App() {
 
       {/* Public client intake — no chrome, no login, shareable link */}
       <Route path="/intake" element={page(<Intake />)} />
+
+      {/* Management portal — Phase A tester sign-in (no real auth yet) */}
+      <Route path="/portal/login" element={page(<PortalLogin />)} />
+      <Route path="/portal/front-desk" element={page(<FrontDesk />)} />
     </Routes>
   )
 }
