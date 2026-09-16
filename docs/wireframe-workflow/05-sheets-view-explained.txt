@@ -1,0 +1,113 @@
+═══════════════════════════════════════════════════════════════════
+05 — THE SHEETS VIEW, EXPLAINED (how it's built)
+Route: /sheets · Files: src/pages/Sheets.tsx · src/components/sheets/
+  grid.tsx · useSheetGrid.ts · store.ts · libraries.ts ·
+  DailyTab.tsx · WorkoutsTab.tsx · NutritionTab.tsx
+═══════════════════════════════════════════════════════════════════
+
+WHAT IT IS
+──────────
+A spreadsheet-grade data-entry surface inside the app — the member's
+daily log. Three tabs: DAILY TRACKING (weight/steps/sleep/calories/
+water/energy/notes), WORKOUTS (exercises × sets with kg/reps/done),
+NUTRITION (meals with food items + macros). It feels like Excel but
+branded: dark grid, white active ring, everything keyboard-driven.
+
+WHY IT'S VALUABLE FOR A PT APP
+──────────────────────────────
+Trainers know clients think in spreadsheets. Instead of forms with
+one field per metric (slow, annoying), the whole week is one grid:
+click a cell, type, Tab to the next. A week of logging takes seconds.
+Adherence goes up because friction goes down.
+
+ARCHITECTURE (3 layers)
+───────────────────────
+1. GRID ENGINE (grid.tsx + useSheetGrid.ts) — reusable, tab-agnostic
+   ┌──────────────────────────────────────────────────────────┐
+   │ • Renders rows×columns as a CSS grid of cells            │
+   │ • One ACTIVE CELL state: (rowId, colKey)                 │
+   │ • Cell = display mode (formatted value) or edit mode     │
+   │   (input) — double-click/F2/typing switches to edit      │
+   │ • Keyboard map:                                          │
+   │     Arrow keys → move active cell                        │
+   │     Tab / Shift-Tab → next / previous cell               │
+   │     Enter → commit + move down                           │
+   │     F2 or start typing → edit current cell               │
+   │     Esc → cancel edit, restore value                     │
+   │ • Commit flow: parse → validate → store mutation →       │
+   │   400ms white border flash on the cell → recompute       │
+   │   derived values (week averages, volumes, macro totals)  │
+   └──────────────────────────────────────────────────────────┘
+2. TAB COMPONENTS — each tab only defines:
+   • its columns (key, label, type: number/text/select, step)
+   • its rows (from data) and how a row renders
+   • what "derived footer" to show (WEEK AVG, day totals…)
+   The grid engine handles ALL interaction. Adding a 4th tab
+   (e.g. measurements) = define columns + rows only.
+3. STORE (store.ts) — the "database"
+   • Module-level store using useSyncExternalStore
+   • Seeds from mock.ts (16 weeks of deterministic logs)
+   • Mutations: updateDaily(day, field, value), updateSet(),
+     addSet(), toggleSetDone(), addFoodRow()…
+   • Every mutation → notify subscribers → all subscribed
+     components re-render (Sheets grid, Dashboard checklist,
+     week snapshot) → persist to localStorage
+     (key 'vault-sheet-store') → status pill flips
+     "Unsaved changes" → "Saved · just now"
+   • WHY useSyncExternalStore: no library needed, React-safe,
+     and ANY component can subscribe to the same data — this is
+     how the Dashboard "Today's plan" stays in sync with the
+     Workouts tab with zero prop drilling.
+
+DATA FLOW DIAGRAM
+─────────────────
+mock.ts (seed) ──► store.ts ◄── mutations from grid/cells
+                     │  │─► localStorage (persist)
+                     ▼
+        subscribed components: Sheets tabs · Dashboard
+        "Today's plan" · Week snapshot · (Analytics reads
+        mock.ts series directly)
+
+THE THREE TABS
+──────────────
+DAILY TRACKING — rows = 7 days of selected week.
+  Columns: Weight kg · Steps · Sleep h · Calories · Water ·
+  Energy (1-5 squares) · Notes. Footer: WEEK AVG per column
+  (tween-animated recalculation).
+WORKOUTS — accordion of sessions; logged sessions read-only
+  until [Edit] unlock; planned session (from the program) is
+  editable and IS the Dashboard checklist. Exercise combobox
+  (fuzzy filter over exercise library), + Add set, done
+  checkboxes, live VOLUME counter (Σ sets×reps×kg) with number
+  tween, white border flash when a session completes.
+  Side rail: THIS WEEK totals + delta vs last week.
+NUTRITION — sticky macro target bars on top (P/C/F vs target),
+  meal-grouped rows; food combobox autocompletes kcal+macros
+  from a local HK food database; quantity field rescales macros
+  live; subtotal per meal + pinned DAY TOTAL row.
+
+DETAILS THAT MAKE IT FEEL PREMIUM (copy these)
+──────────────────────────────────────────────
+• 2px white ring on the active cell (not browser-blue)
+• 400ms commit flash so the user feels the save
+• Numbers use tabular-nums so columns align perfectly
+• Tab switch underline animates via Framer Motion layoutId
+• Status pill is honest: edits persist to localStorage, so
+  "Saved" is true (until you wire a real DB)
+• Mobile: grid → stacked day cards; floating + button to add
+  rows (offset above the WhatsApp pill)
+• Export CSV = real Blob download of the visible week
+• ⋮ menu: Copy last week (prefill), Clear week, Print
+
+TO REBUILD IN YOUR APP — MINIMAL SPEC FOR KIMI CODE
+───────────────────────────────────────────────────
+"Build a reusable SheetGrid component: props = columns[]
+ (key,label,type,step), rows[], onCellChange(rowId,colKey,value).
+ Internal state: activeCell + editingCell. Full keyboard nav
+ (arrows/Tab/Enter/F2/Esc), click-to-edit, commit-on-blur with
+ 400ms flash. Then a module-level store with useSyncExternalStore
+ + localStorage persistence, seeded from my mock data file.
+ Then three tabs: Daily (7 metric columns), Workouts (session
+ accordions with sets), Nutrition (meal rows with macro autofill).
+ Dashboard checklist subscribes to the same store."
+═══════════════════════════════════════════════════════════════════

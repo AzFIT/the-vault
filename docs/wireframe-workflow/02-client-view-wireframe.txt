@@ -1,0 +1,108 @@
+═══════════════════════════════════════════════════════════════════
+02 — CLIENT VIEW WIREFRAME
+Persona: gym member (demo: "Rachel Cheung"). Entry: LOGIN on the
+marketing navbar → /dashboard. Sidebar: DASHBOARD · SHEETS ·
+ANALYTICS · PLAN SUMMARY highlighted for clients.
+═══════════════════════════════════════════════════════════════════
+
+PAGE: /dashboard — CLIENT DASHBOARD
+───────────────────────────────────
+┌────────────────────────────────────────────────────────────────┐
+│ SUNDAY, 8 FEBRUARY 2026 · SHEUNG WAN          (date eyebrow)   │
+│ Good morning, Rachel                     (time-aware greeting) │
+│ Week 16 of Body Composition Reset · 4 sessions · Coach: Dan K. │
+│                              [GYM OPEN 8:00AM–8:00PM] [NEXT    │
+│                               SESSION: MON 6:30AM — DAN KAN]   │
+├────────────────────────────────────────────────────────────────┤
+│ ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐             │
+│ │   73    │  │  93%    │  │ 6,731   │  │ 7h 30m  │  4 PROGRESS │
+│ │    ◯    │  │   ◯     │  │   ◯     │  │   ◯     │  RINGS (SVG,│
+│ │ FITNESS │  │ MACROS  │  │ STEPS   │  │ SLEEP   │  animate on │
+│ │ SCORE   │  │2,106/   │  │Target   │  │Target 8h│  mount, ring │
+│ │↑1 wk    │  │1,900kcal│  │ 9,000   │  │94% qual.│  click→/ana- │
+│ └─────────┘  └─────────┘  └─────────┘  └─────────┘  lytics)    │
+│  Macros ring has P/C/F micro-ticks; hover = 7-day sparkline    │
+├───────────────────────────────────────────┬────────────────────┤
+│ TODAY'S PLAN                              │ NEXT 1:1 SESSION   │
+│ Upper Body Strength — Day 2               │ Monday 6:30am      │
+│ Next up · Mon 9 Feb · with Dan Kan        │ with Dan Kan · VIP │
+│ ☐ Bench Press        4×6 @ 61.5kg [PR]    │ Studio             │
+│ ☐ Barbell Row        4×8 @ 59kg           │ [DK] [ADD TO       │
+│ ☐ Overhead Press     3×8 @ 31.5kg         │      CALENDAR]     │
+│ ☐ Lat Pulldown       3×10 @ 50kg          │      ↓ downloads   │
+│ ☐ Incline DB Curl    3×12 @ 12kg          │      .ics file     │
+│ 0 of 5 complete ▓░░░░  [OPEN IN SHEETS →] │────────────────────│
+│ (checks sync WITH the Sheets planned      │ NOTE FROM DAN      │
+│  session — same store)                    │ "Sleep's trending  │
+│                                           │  up — keep protein │
+│                                           │  above 130g..."    │
+├───────────────────────────────────────────┴────────────────────┤
+│ ACTIVITY TIMELINE          [VIEW ALL]  │ ACHIEVEMENTS 6/12     │
+│ Today 8:15am  Logged breakfast  [NUTR] │ ┌──┐┌──┐┌──┐         │
+│ Today         Rest day · 6,731  [RECO] │ │⚑ ││🏅││🔥│ unlocked│
+│ Yesterday     Hyrox class 66min [CLASS]│ └──┘└──┘└──┘ (pop-in │
+│ Fri 6 Feb     Rest day 6,818    [RECO] │ ┌──┐┌──┐┌──┐         │
+│ Thu 5 Feb     Lower Body 57min  [WORK] │ │░░││░░││░░│ locked  │
+│ (dot colors: white=done, grey=rest,    │ └──┘└──┘└──┘ greyed) │
+│  hollow=missed; line draws down)       │ tooltips on hover    │
+├────────────────────────────────────────┴───────────────────────┤
+│ WEEK SNAPSHOT — 7 day columns: steps bars vs target tick,      │
+│ sleep bars, calorie dots, today highlighted                    │
+└────────────────────────────────────────────────────────────────┘
+
+FLOWS OUT OF DASHBOARD
+  ring card click ............... /analytics
+  OPEN IN SHEETS → .............. /sheets (workouts tab)
+  ADD TO CALENDAR ............... downloads .ics (no navigation)
+  sidebar PLAN SUMMARY .......... /plan-summary
+
+PAGE: /sheets — TRACKING SHEETS (see file 05 for full build detail)
+───────────────────────────────────────────────────────────────────
+┌────────────────────────────────────────────────────────────────┐
+│ TRACKING SHEETS   [Daily Tracking|Workouts|Nutrition] ←tabs    │
+│                   [← Previous week] Wk 16 [Next week →]        │
+│                   [Export CSV] [⋮ More actions]  ●Saved·just now│
+├────────────────────────────────────────────────────────────────┤
+│  Spreadsheet grid (see 05): click cell → edit; arrows/Tab/     │
+│  Enter navigate; F2 edit; Esc cancel; type-to-overwrite;       │
+│  2px white ring on active cell; 400ms flash on commit          │
+└────────────────────────────────────────────────────────────────┘
+  Tab underline animates with Framer Motion layoutId.
+  ⋮ menu: Copy last week / Clear week / Print.
+  Mobile: grid collapses to card stack; floating + add button.
+
+PAGE: /analytics — ANALYTICS
+────────────────────────────
+┌────────────────────────────────────────────────────────────────┐
+│ Range: [4W|8W|16W|ALL]                    [REPORT →/plan-summary]│
+│ ┌WEIGHT TREND──────────────┐ ┌WEEKLY VOLUME───────┐            │
+│ │ line: actual/trend/target│ │ bars per week; best│            │
+│ │ + goal-zone band; legend │ │ & current in white │            │
+│ │ chips toggle series      │ └────────────────────┘            │
+│ │ click point → day drawer │ ┌MACROS──────────────┐            │
+│ └──────────────────────────┘ │ donut (hover dims) │            │
+│ ┌CONSISTENCY HEATMAP────────┐│ + bullet bars vs   │            │
+│ │ 16wk × 7day cells, scan-in││ targets P/C/F      │            │
+│ │ white=trained grey=rest   │└────────────────────┘            │
+│ │ hollow=missed             │┌PR BOARD───────────┐             │
+│ └───────────────────────────┘│ lift, e1RM spark-  │             │
+│ INSIGHT STRIP: rule-based    │ line, [NEW PR] pill│             │
+│ tips ("Protein avg 112g —    │ click → history    │             │
+│ 18g under target")           │ modal              │             │
+│                              └────────────────────┘             │
+└────────────────────────────────────────────────────────────────┘
+  Day drawer (right slide): that day's weight/macros/workout,
+  [prev/next day] nav, "Edit in Sheets →" → /sheets.
+  ALL charts monochrome ramp: white > #b9b4b5 > #7d7778 > #4a4546.
+
+PAGE: /plan-summary — PLAN SUMMARY (client reads own plan)
+──────────────────────────────────────────────────────────
+Clients see the branded report their coach generated:
+calorie targets → macro split → roadmap → training template →
+sample meal day → rules → FAQ → signature block.
+[Generate PDF] → window.print() with ink-friendly print.css
+(white paper, black ink, app chrome hidden).
+NOTE: in this build the page ALSO shows the coach input console
+(demo). In your app, gate the console to trainers only; clients
+get read-only report via RLS.
+═══════════════════════════════════════════════════════════════════

@@ -1,0 +1,121 @@
+═══════════════════════════════════════════════════════════════════
+03 — TRAINER VIEW WIREFRAME
+Persona: head coach (demo: "Dan Kan"). Entry: sidebar toggle
+COACH VIEW → /coach. In production: role=trainer from auth.
+═══════════════════════════════════════════════════════════════════
+
+PAGE: /coach — COACH DASHBOARD (7 sections on one page)
+───────────────────────────────────────────────────────
+┌────────────────────────────────────────────────────────────────┐
+│ Good afternoon, Dan            [DK mono]  [This month ▾ range] │
+├────────────────────────────────────────────────────────────────┤
+│ ┌ACTIVE──┐ ┌SESSIONS─┐ ┌REVENUE──┐ ┌AVG ADHERENCE┐  KPI cards │
+│ │CLIENTS │ │THIS WEEK│ │THIS MONTH│ │             │  numbers   │
+│ │  12    │ │   34    │ │HK$84,200 │ │    81%      │  count up  │
+│ └────────┘ └─────────┘ └─────────┘ └─────────────┘            │
+├────────────────────────────────────────────────────────────────┤
+│ ⚠ 4 CLIENTS AT RISK — click banner → filters roster to AT RISK│
+├───────────────────────────────────┬────────────────────────────┤
+│ CLIENT ROSTER                     │ TODAY'S SCHEDULE           │
+│ [Search clients___]               │ vertical timeline:         │
+│ [ALL|PT 3X|PT 2X|WOMEN'S|AT RISK④]│ 06:30 Rachel C. — PT (VIP) │
+│ ┌───────────────────────────────┐ │ 08:00 Strength class 5/6   │
+│ │RC Rachel Cheung  Body comp    │ │ 12:15 Marcus L. — PT       │
+│ │   PT 3x/wk ▓▓▓▓░ 84% adher.   │ │ 13:00 Hyrox class 6/6 FULL │
+│ │ML Marcus Lau     Strength     │ │ 18:30 Karen N. — PT        │
+│ │   PT 2x/wk ▓▓░░░ 62% AT RISK  │ │ (pulsing NOW line; class   │
+│ │ ...12 rows, adherence bars    │ │  rows show capacity x/6)   │
+│ │ click row → CLIENT DRAWER →   │ │ [+ Book] simulates booking │
+│ └───────────────────────────────┘ │                            │
+├───────────────────────────────────┴────────────────────────────┤
+│ PROGRAM BUILDER                                                │
+│ Library: [Vault Strength 12wk][Hyrox Engine 8wk]               │
+│          [Postnatal Return 10wk][Body Comp Reset 16wk][+ New]  │
+│ Week strip: W1 W2 W3 ... W16 (horizontal scroll)               │
+│ ┌ Mon ────────┬ Wed ────────┬ Fri ────────┐                    │
+│ │ Upper A     │ Lower A     │ Conditioning│ ← drag sessions    │
+│ │ ▸ Bench 4×6 │ ▸ Squat 5×5 │ ▸ EDT 15min │   between days     │
+│ │ ▸ Row  4×8  │ ▸ RDL  4×8  │             │   (HTML5 DnD,      │
+│ │ [+exercise] │ [+exercise] │ [+ session] │   dashed drop zone)│
+│ └─────────────┴─────────────┴─────────────┘                    │
+│ exercise rows editable: sets/reps/kg/RPE · ↑↓ move · ✕ remove  │
+│ [Duplicate week]  Assign to: ☑Rachel ☐Marcus ...               │
+│ [SAVE] → toast "Program updated — N clients notified"          │
+│ (assignments write to shared overrides → roster rows update)   │
+├───────────────────────────────────┬────────────────────────────┤
+│ MESSAGING                         │ REVENUE ANALYTICS          │
+│ thread list (unread ⊙):           │ stacked bars, 6 months:    │
+│  Rachel · "Can't make Thu..."     │ memberships+PT+intro packs │
+│  Marcus · "..."                   │ legend hover-dim/click-    │
+│ ┌─ thread ─────────────────────┐  │ isolate; tier mix bars;    │
+│ │ client bubble (dark)         │  │ top-5 client LTV strip     │
+│ │        coach bubble (white)  │  │ (HK$ lifetime value)       │
+│ │ [suggested replies chips]    │  │                            │
+│ │ [Type a message______][Send] │  │                            │
+│ │ send → bubble + typing… →    │  │                            │
+│ │ auto-reply after 1.5s (demo) │  │                            │
+│ └──────────────────────────────┘  │                            │
+├───────────────────────────────────┴────────────────────────────┤
+│ QUICK ACTIONS: [Onboard new client] [Broadcast message]        │
+│   [New program →scrolls to builder] [Export →/plan-summary]    │
+│   (modals: local submit + toast)                               │
+└────────────────────────────────────────────────────────────────┘
+
+CLIENT DRAWER (slides in from right, 480px)
+  header: monogram + name + tier pill + status pill
+  4 mini progress rings (derived from adherence)
+  8-week adherence sparkline · recent activity list
+  actions: [View analytics →/analytics] [Message →opens thread]
+           [Edit program →focuses builder]
+  ESC / backdrop closes.
+
+PAGE: /plan-summary — PLAN GENERATION (trainer side)
+────────────────────────────────────────────────────
+┌──────────────────────┬─────────────────────────────────────────┐
+│ INPUT CONSOLE        │ LIVE REPORT DOCUMENT (branded)          │
+│ (sticky, 380px)      │ The Vault Fitness — gold logo header    │
+│ Client picker ▾      │ ── YOUR NUMBERS ──                      │
+│ (12 mock clients     │ BMR (Katch-McArdle/Mifflin) · TDEE      │
+│  autofill stats)     │ Calorie ladder: 15/20/25% deficit cards │
+│ Gender ○M ○F         │ + hard floor clamp note                 │
+│ Age [42] Ht [178]    │ ── MACROS ──                            │
+│ Wt [84.5] BF% slider │ 5 style table @ target & maintenance:   │
+│  (→ LEAN MASS MODE)  │ Balanced/HighP/LowCarb/LowFat/Keto-ish  │
+│ Activity preset ▾    │ protein-floor flagging · [RECOMMENDED]  │
+│ Goal ▾ Pace [15|20|25│ pill + mini donut                        │
+│ Program wks slider   │ ── EXPECTED OUTCOMES ──                 │
+│ Diet break switch    │ kg/week, 12-week projection             │
+│ PT/wk [3] Solo [1]   │ ── ROADMAP ──                           │
+│ Trainer/Business     │ Phase blocks; dashed = diet break       │
+│ [Generate PDF][Reset]│ ── TRAINING (GBC) ──                    │
+│                      │ template scaled to PT/solo split        │
+│ every keystroke →    │ ── SAMPLE DAY OF EATING ──              │
+│ report recomputes    │ meals auto-scaled to macros ±5%         │
+│ live                 │ ── RULES / FAQ / signature block        │
+└──────────────────────┴─────────────────────────────────────────┘
+Engine: src/lib/planBlueprint.ts — pure functions:
+  computeBodyAndCalories() → BMR/TDEE/targets
+  buildMacroTable() · recommendStyle() · computeExpectedOutcomes()
+  buildRoadmap() · buildGbcPlan() · buildSampleDay()
+[Save to client] stores version per client (mock).
+
+PAGE: /admin/enquiries — STAFF ENQUIRIES INBOX
+─────────────────────────────────────────────
+┌────────────────────────────────────────────────────────────────┐
+│ ENQUIRIES  12 total · 3 new                [Export CSV]        │
+│ [ALL|RECEPTION|SENIOR|NEW ONLY]                                │
+│ ┌──────────────────────────────────────────────────────────────┤
+│ │●RC Rachel Cheung   12 MONTH · HK$10,656  [SENIOR TEAM] 2h ago│
+│ │ ML Marcus Lau      DAY PASS · HK$350     [RECEPTION]   5h ago│
+│ │ click card → DETAIL DRAWER: full form payload,               │
+│ │ [WhatsApp →wa.me/852...] [Copy details] [Mark as contacted]  │
+│ └──────────────────────────────────────────────────────────────┤
+│ empty state: gold V watermark, "No enquiries yet…"             │
+└────────────────────────────────────────────────────────────────┘
+Sidebar ENQUIRIES badge updates live (custom window event).
+
+MARKETING → APP CONNECTION
+──────────────────────────
+Navbar LOGIN → /dashboard · JOIN GYM buttons (6) → enquiry modals
+→ submitEnquiry() → localStorage → appears in /admin/enquiries.
+═══════════════════════════════════════════════════════════════════

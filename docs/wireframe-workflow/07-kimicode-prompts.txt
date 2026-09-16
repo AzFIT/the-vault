@@ -1,0 +1,176 @@
+================================================================================
+07 — READY-TO-PASTE KIMI CODE PROMPTS
+The Vault PT App — Wireframe Workflow Pack
+================================================================================
+
+HOW TO USE:
+  1. Paste the wireframe file(s) named under "CONTEXT" into Kimi Code first.
+  2. Then paste the matching PROMPT below, verbatim.
+  3. Build ONE view at a time, in this order:
+       Shell → Client Dashboard → Sheets → Analytics → Plan Engine →
+       Coach Dashboard → Enquiry Forms + Inbox
+  4. After each prompt, run/preview and check against the wireframe before
+     moving to the next.
+
+Replace anything in [BRACKETS] with your own brand values.
+
+================================================================================
+PROMPT 1 — APP SHELL & NAVIGATION
+CONTEXT: 01-app-map-and-architecture.txt
+--------------------------------------------------------------------------------
+Build the app shell for a personal-training web app (React + TypeScript +
+Tailwind + React Router, BrowserRouter).
+
+Requirements:
+- Pure black (#000000) background for all app pages; white/gray text only;
+  one gold accent color [#d4af37] used sparingly (badges, active states, CTAs).
+- Left sidebar, 240px, fixed: logo at top, nav items DASHBOARD, SHEETS,
+  ANALYTICS, COACH, PLAN SUMMARY (uppercase, letter-spaced, 12px); a "STAFF"
+  divider; an ENQUIRIES item with a gold count badge showing new enquiries.
+- CLIENT VIEW / COACH VIEW toggle at the bottom of the sidebar that navigates
+  to /dashboard or /coach respectively.
+- Top bar inside the content area: page title on the left; on the right a
+  search button that opens a ⌘K/Ctrl+K command palette (fuzzy search over
+  pages, clients, and programs; arrow keys + Enter to navigate; ESC and
+  backdrop click to close), a notifications bell with a dropdown (mock items,
+  gold dot on unread, "mark all read"), and a user chip with initials monogram.
+- Routes: /dashboard /sheets /analytics /coach /plan-summary
+  /admin/enquiries, plus a styled 404 page for everything else. Lazy-load each
+  page with a centered loading spinner.
+- Sidebar collapses to a hamburger overlay on mobile.
+Build only the shell with placeholder page bodies; real pages come next.
+
+================================================================================
+PROMPT 2 — CLIENT DASHBOARD
+CONTEXT: 01 + 02-client-view-wireframe.txt
+--------------------------------------------------------------------------------
+Build the /dashboard page (client view) per the wireframe.
+
+- Header: greeting with client name, current date, and a fitness-score number.
+- Four animated progress rings in a row: FITNESS SCORE (0-100), MACROS
+  (protein hit %), STEPS (vs 10k goal), SLEEP (vs 8h goal). Rings animate from
+  0 on load; stroke uses the single gold accent only for the primary value,
+  gray otherwise; pure monochrome otherwise.
+- "TODAY'S PLAN" checklist card: 4-6 items with square checkboxes; ticking
+  persists to localStorage.
+- Activity timeline: last 7 days, icon + label + value per day.
+- Achievement grid: 12 badges, unlocked ones in gold, locked ones gray.
+- Week snapshot strip: 7 mini bars of training volume.
+All data from a single mock data module (client record, 16 weeks of logs,
+selector functions for fitness score and PRs). No inline math in components.
+
+================================================================================
+PROMPT 3 — TRACKING SHEETS (spreadsheet view)
+CONTEXT: 02 + 05-sheets-view-explained.txt
+--------------------------------------------------------------------------------
+Build the /sheets page: a spreadsheet-grade tracking grid with three tabs —
+Daily Tracking, Workouts, Nutrition.
+
+- Grid behavior: click a cell to edit inline; Arrow keys / Tab / Shift-Tab /
+  Enter move between cells like Excel; Escape cancels; Enter commits.
+- Header bar: Previous week / Next week navigation, week label, "Add row",
+  "Export CSV" (downloads current tab), and a "Saved · just now" indicator.
+- Daily tab: rows = days of week; columns: Weight, Steps, Sleep, Calories,
+  Protein, Carbs, Fat, Notes.
+- Workouts tab: rows = exercises; columns: Exercise, Sets, Reps, Load, RPE;
+  live-recompute total weekly volume in the footer.
+- Nutrition tab: rows = meals; columns: Meal, Calories, Protein, Carbs, Fat;
+  user can add/delete custom rows.
+- All edits persist to localStorage under one key and are restored on reload;
+  a demo reset button clears it.
+- Styling: pure black, thin #232323 borders, monospace numbers, gold focus
+  ring on the active cell.
+
+================================================================================
+PROMPT 4 — ANALYTICS
+CONTEXT: 02-client-view-wireframe.txt (analytics section)
+--------------------------------------------------------------------------------
+Build the /analytics page (client view):
+- Weight trend line chart vs target line (16 weeks, monochrome, gold only for
+  the target line).
+- Weekly training-volume bar chart.
+- Macro breakdown donut + bullet bars vs targets.
+- 16-week consistency heatmap (GitHub-style, grayscale ramp, cells scan in
+  with a staggered animation).
+- PR board: personal records list (exercise, load, date).
+- Insight strip: 3 auto-generated one-line insights from the data.
+Use Recharts (or similar); every chart strictly grayscale + the single gold
+accent. All values from the shared mock module's selectors.
+
+================================================================================
+PROMPT 5 — PLAN SUMMARY (Blueprint engine)
+CONTEXT: 02/03 plan-summary sections
+--------------------------------------------------------------------------------
+Build a /plan-summary page: a calorie/macro plan generator.
+
+- Left: sticky input console — age, sex, height, weight, body-fat % (optional),
+  activity level (preset ×1.4 for office worker), goal (cut/recomp/maintain),
+  pace (conservative/standard/aggressive).
+- Engine (pure function, no storage):
+    BMR = Mifflin-St Jeor; if body-fat % given use Katch-McArdle.
+    TDEE = BMR × activity factor.
+    Deficit by pace: 15% / 20% / 25%, clamped to a minimum-calorie floor.
+    Protein 2.0 g/kg, fat 0.8 g/kg, remainder carbs.
+    Include an optional diet-break week every [N] weeks.
+- Right: a branded "report document" that updates live: calorie ladder
+  (BMR → TDEE → target), macro cards, a 4-phase roadmap, and one sample meal
+  day hitting the macros. Print stylesheet so it prints/exports to PDF cleanly
+  (WYSIWYG).
+Keep the engine in its own file as pure functions with unit-testable outputs.
+
+================================================================================
+PROMPT 6 — COACH (TRAINER) DASHBOARD
+CONTEXT: 03-trainer-view-wireframe.txt
+--------------------------------------------------------------------------------
+Build the /coach page (trainer view) per the wireframe:
+- KPI row: active clients, sessions this week, at-risk clients, monthly revenue.
+- AT RISK banner listing clients whose adherence dropped (gold border).
+- Client roster table: name (initials monogram, NO photos), program, adherence
+  %, last check-in, status; filter ALL / AT RISK; clicking a row opens a
+  right-side client drawer (role=dialog, ESC/backdrop close) with client
+  details, recent logs, and actions.
+- Today's schedule list with an "Add to calendar" button that generates and
+  downloads a real .ics file.
+- Program builder: drag-and-drop weekly template from 4 programs; assign to a
+  client (mock).
+- Messaging panel (WhatsApp-style, mock) with a "Broadcast message" action.
+- Revenue bar chart: 12 months in HK$.
+- Quick actions: "Onboard new client", "Broadcast message", "Export roster CSV".
+All data from the shared mock module (12 roster clients, coachStats selector).
+
+================================================================================
+PROMPT 7 — ENQUIRY FORMS + STAFF INBOX
+CONTEXT: 03 + 04-actions-buttons-directory.txt + 06-data-model-and-connections.txt
+--------------------------------------------------------------------------------
+Build a two-tier enquiry system:
+
+FORMS (modal, opened from pricing cards):
+- Tier A (short-term passes: Day / Week / 1-Month) → routed to RECEPTION.
+  Fields (9): name, phone, email, preferred contact method (WhatsApp/call/
+  email), goal, training experience, preferred days/times, how did you hear
+  about us, message (optional).
+- Tier B (long-term: 6-Month / 12-Month / Autopay) → routed to SENIOR STAFF.
+  Fields (13): all Tier A fields plus occupation, budget confirmation, start
+  date, and commitment acknowledgment checkbox.
+- Validation: submit button always enabled; on submit with invalid fields show
+  inline errors; also show errors on blur (touched). Real <label htmlFor> on
+  every field. On success: save the enquiry (localStorage now; one function,
+  submitEnquiry(), is the swap point for a real DB later), fire a window event
+  'enquiries-changed', show a success toast.
+
+INBOX (/admin/enquiries, staff-only page in the app shell):
+- Header: total + new counts, "Export CSV" button.
+- Filter tabs: ALL / RECEPTION / SENIOR / NEW ONLY.
+- Card list: gold route pill (RECEPTION/SENIOR), time-ago, name, contact
+  method, gold dot if new.
+- Clicking a card opens a right detail drawer: all submitted fields, a WhatsApp
+  button (wa.me link with digits-only phone), "Copy details", "Mark as
+  contacted". ESC/backdrop closes.
+- The sidebar ENQUIRIES badge listens to the 'enquiries-changed' event and
+  updates live without refresh.
+
+================================================================================
+BUILD ORDER REMINDER
+  Shell → Dashboard → Sheets → Analytics → Plan Engine → Coach → Enquiries
+Test each piece against its wireframe before starting the next.
+================================================================================

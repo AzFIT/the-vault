@@ -1,0 +1,162 @@
+================================================================================
+06 — DATA MODEL & CONNECTIONS
+The Vault PT App — Wireframe Workflow Pack
+================================================================================
+
+Everything in this build is MOCK DATA (no real backend). All data lives in a
+small set of plain TypeScript files + localStorage. This file maps every data
+source, what it contains, which pages read it, and the exact swap-point where
+you replace mocks with a real database (e.g. Supabase) later.
+
+--------------------------------------------------------------------------------
+1. THE DATA FILES (single source of truth)
+--------------------------------------------------------------------------------
+
+src/data/mock.ts        → ALL people, programs, classes, pricing, logs, revenue
+src/lib/enquiries.ts    → enquiry form submissions (localStorage-persisted)
+src/components/sheets/store.ts → tracking-sheet edits (localStorage-persisted)
+src/lib/planBlueprint.ts → PURE math engine (no data; inputs in → plan out)
+
+Rule that keeps the app clean: PAGES NEVER INVENT DATA.
+Every number on screen comes from one of the four sources above.
+When you rebuild, copy this rule — one mock module, many readers.
+
+--------------------------------------------------------------------------------
+2. mock.ts — ENTITY MODEL
+--------------------------------------------------------------------------------
+
+COACH (5 records)
+  id, name, initials, role, specialty, whatsapp
+  e.g. Dan Kan (DK, Head Coach), Ziggy Makant (ZM), Teresa Riddle,
+       Tarryn Maree, Emily Flavell (women's health)
+
+CLIENT (1 demo client + 12 coach-roster clients)
+  id, name, initials, goal, program, coach, joinDate,
+  status: 'active' | 'at-risk'        ← drives the AT RISK banner
+  lastCheckIn, adherence %, nextSession
+
+PROGRAM (4 records)
+  id, name, weeks, sessionsPerWeek, focus
+  e.g. Strength Foundations, Women's Health, Fat Loss, Performance
+
+CLASS
+  id, name, day, time, coach, capacity, price (HK$150 drop-in / HK$350 pack)
+
+PRICING (real Vault numbers — content, not "data")
+  Day HK$350 · Week HK$599 · 1-Month HK$1,388
+  6-Month HK$6,528 · 12-Month HK$10,656 (gold "Best Value") · Autopay HK$1,288/mo
+  Intro Package HK$4,500
+
+TRAINING LOGS — 16 weeks of deterministic entries per client
+  date, weight, steps, sleep, calories, protein/carbs/fat,
+  workouts[] { exercise, sets, reps, load }     ← feeds Sheets + Analytics
+
+REVENUE — 12 monthly HK$ totals for the Coach revenue chart
+
+SELECTOR FUNCTIONS (computed views over the raw records)
+  fitnessScore(client)  → 0–100 ring value on the Dashboard
+  prBoard(client)       → personal records list
+  coachStats(coach)     → KPIs: active clients, sessions this week, at-risk count
+  formatHKD(n)          → "HK$10,656" everywhere
+
+PATTERN TO COPY: raw records at the top, tiny selector functions at the
+bottom. Pages import selectors, never re-derive math inline.
+
+--------------------------------------------------------------------------------
+3. store.ts — SHEETS STATE (persisted)
+--------------------------------------------------------------------------------
+
+Shape:
+  dailyEdits    { [rowId]: { steps, sleep, calories, ... } }
+  workoutEdits  { [rowId]: { sets, reps, load, ... } }
+  foodRows      custom nutrition rows the user added
+  checklist     today's-plan tick state
+  unlocked      which weeks are editable
+
+Mechanism: a tiny store built on React's useSyncExternalStore.
+  - Every mutation → save whole state to localStorage key 'vault-sheet-store'
+  - On load → read that key first, fall back to mock defaults
+  - This is why "Saved · just now" appears in the Sheets header
+  - resetData() clears the key (used by demo reset)
+
+PATTERN TO COPY: one store object, one localStorage key, save-on-mutate.
+No Redux/Zustand needed at this size.
+
+--------------------------------------------------------------------------------
+4. enquiries.ts — ENQUIRY PIPELINE (persisted)
+--------------------------------------------------------------------------------
+
+Enquiry record:
+  id, createdAt, route: 'reception' | 'senior',
+  status: 'new' | 'contacted',
+  payload: all form fields (name, phone, goal, ...)
+
+Functions:
+  submitEnquiry(enquiry)     → saves to localStorage, fires window event
+                               'vault-enquiries-changed'
+  listEnquiries()            → Inbox page reads this
+  markContacted(id)          → flips status, clears the NEW badge
+  countNewEnquiries()        → drives the gold badge in the sidebar
+  exportCsv()                → BOM + quoting, one-click staff export
+
+Sidebar badge and Inbox both listen to 'vault-enquiries-changed',
+so a submission updates the badge instantly with no refresh.
+
+--------------------------------------------------------------------------------
+5. WHO READS WHAT (connection map)
+--------------------------------------------------------------------------------
+
+                    ┌─────────────┐
+                    │   mock.ts   │
+                    └──────┬──────┘
+        ┌──────────┬───────┼───────────┬─────────────┐
+        ▼          ▼       ▼           ▼             ▼
+    Dashboard  Sheets   Analytics   Coach      Marketing
+    (rings,    (tabs    (charts,    (roster,   (pricing,
+     plan,      read     heatmap,    KPIs,      classes,
+     badges)    logs +   PR board)   revenue)   coaches)
+              overlay
+              edits ↑
+        ┌─────────────┐
+        │  store.ts   │ ← Sheets WRITES here (localStorage)
+        └─────────────┘
+
+   EnquiryModal (Day/Week/1-Mo → reception · 6/12-Mo/Autopay → senior)
+        │ submitEnquiry()
+        ▼
+   ┌──────────────┐   listEnquiries()   ┌──────────────────┐
+   │ enquiries.ts │ ──────────────────► │ /admin/enquiries │
+   │ localStorage │ ◄────────────────── │  Inbox page       │
+   └──────────────┘   markContacted()   └──────────────────┘
+
+   Plan Summary page ──inputs──► planBlueprint.ts ──► branded report
+   (pure function: no storage, no side effects)
+
+--------------------------------------------------------------------------------
+6. THE SUPABASE SWAP PATH (when you go real)
+--------------------------------------------------------------------------------
+
+Only THREE touch-points need swapping. Everything else stays.
+
+  A) mock.ts → replace record arrays with Supabase table reads.
+     Keep the selector function signatures identical and pages don't change.
+
+  B) submitEnquiry() → replace localStorage write with:
+         supabase.from('enquiries').insert(record)
+     Keep the 'vault-enquiries-changed' event so the badge still works.
+
+  C) store.ts → replace the localStorage save line with an upsert to a
+     'sheet_edits' table keyed by (client_id, row_id).
+
+Suggested tables:
+  clients, coaches, programs, classes, enquiries, training_logs, sheet_edits
+
+--------------------------------------------------------------------------------
+7. REBUILD CHECKLIST FOR YOUR OWN APP
+--------------------------------------------------------------------------------
+  □ One mock/data module per domain, selectors at the bottom
+  □ One persisted store per user-editable surface (sheets, settings)
+  □ One submission pipeline per form type, with a status field
+  □ A window event (or realtime subscription) so badges update live
+  □ Pure functions for all calculators (plan engine) — no storage inside
+================================================================================

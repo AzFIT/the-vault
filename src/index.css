@@ -1,0 +1,351 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ---- The Vault brand tokens (design.md §2) ---- */
+    --vault-bg: #231f20;
+    --vault-surface: #2c2728;
+    --vault-surface-2: #353031;
+    --vault-surface-3: #3f3a3b;
+    --vault-border: #443e3f;
+    --vault-ink: #ffffff;
+    --vault-muted: #a39e9f;
+    --vault-faint: #9a9496;
+    --vault-btn-text: #3b4752;
+    --vault-btn-hover: #e4e7e9;
+
+    /* Official brand gold (accent only — never large fills) */
+    --vault-gold: #d4af37;
+    --vault-gold-bright: #e9c767;
+    --vault-gold-dim: #8a7427;
+
+    /* Monochrome data-viz ramp (design.md §2) */
+    --viz-1: #ffffff;
+    --viz-2: #b9b4b5;
+    --viz-3: #7d7778;
+    --viz-4: #4a4546;
+    --viz-track: #3a3536;
+    --viz-grid: rgba(255, 255, 255, 0.06);
+    --viz-danger: #8a8485;
+
+    --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-serif: "Trirong", Georgia, "Times New Roman", serif;
+
+    /* ---- shadcn tokens mapped onto the Vault palette ---- */
+    --background: 345 6% 13%;
+    --foreground: 0 0% 100%;
+    --card: 348 6% 16%;
+    --card-foreground: 0 0% 100%;
+    --popover: 348 5% 20%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 209 16% 28%;
+    --secondary: 348 5% 20%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 348 5% 20%;
+    --muted-foreground: 348 3% 63%;
+    --accent: 348 4% 24%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 0% 54%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 348 4% 25%;
+    --input: 348 4% 25%;
+    --ring: 0 0% 100%;
+    --radius: 0.75rem;
+    --sidebar-background: 348 6% 16%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 209 16% 28%;
+    --sidebar-accent: 348 5% 20%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 348 4% 25%;
+    --sidebar-ring: 0 0% 100%;
+  }
+}
+
+@layer base {
+  /* App shell reskin — pure black canvas for /dashboard, /sheets,
+     /analytics, /coach, /plan-summary. Marketing pages keep #231f20. */
+  .app-black {
+    --vault-bg: #000000;
+    --vault-surface: #0c0c0c;
+    --vault-surface-2: #161616;
+    --vault-surface-3: #1f1f1f;
+    --vault-border: #232323;
+    --viz-track: #1a1a1a;
+    /* Gold accents carry over identically onto the black canvas */
+    --vault-gold: #d4af37;
+    --vault-gold-bright: #e9c767;
+    --vault-gold-dim: #8a7427;
+  }
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: rgba(255, 255, 255, 0.85);
+    color: #231f20;
+  }
+  /* Numeric data always tabular (design.md §3) */
+  .tnum,
+  td,
+  [data-tnum] {
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.4);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Eyebrow / kicker — design.md §3. Gold accent on the marketing site;
+     the .app-black canvas keeps kickers muted (gold stays sparse). */
+  .eyebrow {
+    @apply text-[11px] md:text-xs font-normal uppercase;
+    letter-spacing: 0.2em;
+    color: var(--vault-gold);
+  }
+  .app-black .eyebrow {
+    color: var(--vault-muted);
+  }
+  .eyebrow-on-photo {
+    color: var(--vault-gold-bright);
+  }
+
+  /* Marketing primary white button — design.md §5.1 */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-white text-[13px] uppercase font-normal;
+    color: var(--vault-btn-text);
+    letter-spacing: 0.08em;
+    padding: 1.2em 2.2em;
+    border-radius: 0;
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+  .btn-primary:hover {
+    background: var(--vault-btn-hover);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+  .btn-primary .btn-arrow {
+    transition: transform 0.25s ease;
+  }
+  .btn-primary:hover .btn-arrow {
+    transform: translateX(6px);
+  }
+
+  /* Marketing outline button — design.md §5.1 */
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 bg-transparent text-[13px] uppercase font-normal text-white;
+    letter-spacing: 0.08em;
+    padding: 1.2em 2.2em;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 0;
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+  .btn-outline:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
+  }
+  .btn-outline:active {
+    transform: scale(0.98);
+  }
+  .btn-outline .btn-arrow {
+    transition: transform 0.25s ease;
+  }
+  .btn-outline:hover .btn-arrow {
+    transform: translateX(6px);
+  }
+
+  /* Gold CTA — reserved for the featured membership card and enquiry
+     submit buttons. Gold is an accent; this is its only filled use. */
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 text-[13px] uppercase font-medium;
+    background: var(--vault-gold);
+    color: #000;
+    letter-spacing: 0.08em;
+    padding: 1.2em 2.2em;
+    border-radius: 0;
+    transition: background 0.25s ease, transform 0.25s ease, opacity 0.2s ease;
+  }
+  .btn-gold:hover {
+    background: var(--vault-gold-bright);
+    transform: translateY(-1px);
+  }
+  .btn-gold:active {
+    transform: scale(0.98);
+  }
+  .btn-gold:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-gold .btn-arrow {
+    transition: transform 0.25s ease;
+  }
+  .btn-gold:hover .btn-arrow {
+    transform: translateX(6px);
+  }
+
+  /* Enquiry modal fields — white text on #161616 with gold focus ring */
+  .enquiry-label {
+    @apply mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-vault-muted;
+  }
+  .enquiry-input {
+    @apply w-full border border-vault-border bg-[#161616] px-4 py-3 text-[14px] text-white placeholder:text-vault-faint;
+    border-radius: 0;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .enquiry-input:focus {
+    outline: none;
+    border-color: var(--vault-gold);
+    box-shadow: 0 0 0 1px var(--vault-gold);
+  }
+  .enquiry-input[data-invalid='true'] {
+    border-color: rgba(224, 122, 95, 0.8);
+  }
+  .enquiry-error {
+    @apply mt-1.5 text-[12px] text-[#e07a5f];
+  }
+  .enquiry-chip {
+    @apply cursor-pointer select-none border border-vault-border px-3.5 py-2 text-[12px] text-vault-muted;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  }
+  .enquiry-chip:hover {
+    border-color: var(--vault-gold-dim);
+    color: #fff;
+  }
+  .enquiry-chip[data-active='true'] {
+    border-color: var(--vault-gold);
+    color: var(--vault-gold);
+    background: rgba(212, 175, 55, 0.08);
+  }
+
+  /* App ghost button — design.md §5.1 */
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 text-[13px] uppercase;
+    letter-spacing: 0.08em;
+    color: var(--vault-muted);
+    transition: color 0.2s ease;
+  }
+  .btn-ghost:hover {
+    color: #fff;
+  }
+
+  /* App card — design.md §5.5 */
+  .app-card {
+    background: var(--vault-surface);
+    border: 1px solid var(--vault-border);
+    border-radius: 12px;
+  }
+
+  /* Marketing nav link underline grow — design.md §5.2 */
+  .nav-link {
+    @apply relative text-[15px] transition-colors duration-200;
+    color: var(--vault-muted);
+  }
+  .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    width: 100%;
+    height: 1px;
+    background: var(--vault-gold);
+    transform: translateX(-50%) scaleX(0);
+    transform-origin: center;
+    transition: transform 0.3s ease;
+  }
+  .nav-link:hover {
+    color: var(--vault-gold-bright);
+  }
+  .nav-link:hover::after {
+    transform: translateX(-50%) scaleX(1);
+  }
+
+  /* Equipment chip — home.md §4 */
+  .equip-chip {
+    @apply text-[11px] uppercase cursor-default select-none;
+    letter-spacing: 0.14em;
+    border: 1px solid var(--vault-border);
+    color: var(--vault-muted);
+    padding: 0.55em 1.1em;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+  .equip-chip:hover {
+    background: #fff;
+    color: var(--vault-btn-text);
+    border-color: #fff;
+  }
+}
+
+@layer utilities {
+  .kenburns {
+    animation: kenburns 12s linear infinite alternate;
+  }
+  .featured-pulse {
+    animation: featured-pulse 3s ease-in-out infinite;
+  }
+  .scroll-cue-dot {
+    animation: scroll-cue 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes kenburns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes featured-pulse {
+  0%,
+  100% {
+    border-color: rgba(212, 175, 55, 0.45);
+    box-shadow: 0 0 0 rgba(212, 175, 55, 0);
+  }
+  50% {
+    border-color: rgba(233, 199, 103, 0.95);
+    box-shadow: 0 0 24px rgba(212, 175, 55, 0.18);
+  }
+}
+
+@keyframes scroll-cue {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kenburns,
+  .featured-pulse,
+  .scroll-cue-dot {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

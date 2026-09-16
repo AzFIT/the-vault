@@ -1,0 +1,110 @@
+/* ─────────────────────────────────────────────────────────────
+   Print / PDF stylesheet for the Plan Summary report.
+   window.print() → Save as PDF. White paper, black ink, the
+   screen document layout = the PDF layout (WYSIWYG promise).
+   ───────────────────────────────────────────────────────────── */
+
+@page {
+  margin: 18mm;
+}
+
+@media print {
+  /* Hide the app chrome + console — only the document prints */
+  aside,
+  header,
+  .print-hidden,
+  a[href^="https://wa.me"] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Neutralise the app-shell sidebar offset + canvas padding */
+  .lg\:pl-60 {
+    padding-left: 0 !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* Force every animated element fully visible (whileInView etc.) */
+  .vault-report,
+  .vault-report * {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* The document becomes white paper with black ink */
+  .vault-report {
+    background: #ffffff !important;
+    border: none !important;
+    color: #111111 !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .vault-report .report-ink {
+    color: #111111 !important;
+  }
+  .vault-report .report-muted {
+    color: #555555 !important;
+  }
+  .vault-report .report-border {
+    border-color: #d8d8d8 !important;
+  }
+  .vault-report .report-hairline {
+    background: #bbbbbb !important;
+  }
+  .vault-report span.report-hairline,
+  .vault-report div.report-hairline {
+    background: #bbbbbb !important;
+  }
+  .vault-report .report-bar-fill {
+    background: #111111 !important;
+  }
+  .vault-report .report-bar-fill-soft {
+    background: #888888 !important;
+  }
+  .vault-report .report-pill {
+    background: #111111 !important;
+    color: #ffffff !important;
+  }
+  .vault-report .report-dot {
+    background: #ffffff !important;
+    border-color: #111111 !important;
+  }
+  .vault-report .report-row-rec {
+    background: #f2f2f2 !important;
+  }
+
+  /* Logo is white-on-transparent — swap to ink for print */
+  .vault-report .report-logo {
+    filter: invert(1) brightness(0.1);
+  }
+
+  /* Page-break rules: roadmap / training / meal day never split */
+  .vault-report .print-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .vault-report section {
+    break-inside: auto;
+  }
+  .vault-report table,
+  .vault-report tr {
+    break-inside: avoid;
+  }
+
+  /* Footer with wordmark repeats sensibly at the end of the doc */
+  .vault-report .report-footer {
+    margin-top: 24px;
+  }
+}

@@ -1,0 +1,135 @@
+═══════════════════════════════════════════════════════════════════
+04 — ACTIONS & BUTTONS DIRECTORY
+Every interactive element → what it does / where it leads.
+(M = marketing, A = app shell, C = client page, T = trainer page)
+═══════════════════════════════════════════════════════════════════
+
+MARKETING (M)
+─────────────
+Navbar
+  Logo ........................... → / (home top)
+  Nav links (The Gym / Personal Training / Group Classes /
+    Women's Health / Gym Memberships) → scroll to #anchor on /
+  LOGIN ........................... → /dashboard (enters app)
+  Hamburger (mobile) .............. opens full-screen menu
+Home hero
+  START TRAINING → ................ scrolls to #memberships
+  JOIN GYM → ...................... scrolls to #memberships
+Service cards (4) ................. scroll to their #anchor section
+Membership cards (6)
+  JOIN GYM → on Day/Week/1-Month .. opens PASS ENQUIRY modal
+                                    (route: RECEPTION)
+  JOIN GYM → on 6/12-Month/Autopay  opens MEMBERSHIP ENQUIRY modal
+                                    (route: SENIOR TEAM)
+  12-Month card ................... gold "BEST VALUE" styling
+Enquiry modals (both)
+  Submit .......................... validates → saving spinner →
+                                    gold-check success panel +
+                                    "Enquiry sent" toast;
+                                    writes localStorage via
+                                    submitEnquiry() → shows in
+                                    /admin/enquiries
+  ESC / backdrop / ✕ .............. closes modal
+Footer
+  Help links (6) .................. external → thevault-fitness.com
+                                    pages (new tab)
+  Newsletter SUBSCRIBE ............ validates email → saves →
+                                    "Subscribed" toast
+  Directions → .................... external maps link
+WhatsApp pill (everywhere) ........ wa.me/85228859300 (new tab)
+
+APP SHELL (A)
+─────────────
+Sidebar nav items ................. → /dashboard /sheets /analytics
+                                      /coach /plan-summary
+                                      /admin/enquiries (STAFF)
+ENQUIRIES badge ................... gold count of status='new'
+CLIENT VIEW / COACH VIEW toggle ... → /dashboard or /coach
+User chip ......................... persona display (monogram)
+⌘K Search button / hotkey ......... opens command palette:
+   fuzzy search pages/clients/programs; Enter or click →
+   navigates to page (clients/programs → /coach)
+Bell icon ......................... notifications dropdown (4 mock
+   items, gold unread dots); click item → marks read;
+   "Mark all read" clears all dots
+Help (green pill) ................. WhatsApp link
+Mobile hamburger .................. sidebar drawer
+
+CLIENT PAGES (C)
+────────────────
+Dashboard
+  4 ring cards .................... click → /analytics
+  Today's plan checkboxes ......... toggle done in shared store
+                                    (synced with Sheets planned
+                                    session; progress bar updates)
+  OPEN IN SHEETS → ................ → /sheets
+  ADD TO CALENDAR ................. builds + downloads .ics file
+  Achievements .................... hover → tooltip (how to unlock)
+Sheets
+  Tabs Daily/Workouts/Nutrition ... switch grid (animated underline)
+  ← Previous / Next week → ........ page through 16 weeks of data
+  Cell click / type ............... edit in place; commit on
+                                    Enter/blur → recompute totals
+                                    → autosave → "Saved · just now"
+  Keyboard: arrows/Tab/Enter/F2/Esc (see file 05)
+  Workouts tab: [+ Add set], done checkboxes, exercise combobox,
+    [Edit] unlock on logged sessions, volume counter re-tweens
+  Nutrition tab: food combobox autocompletes macros, qty scaling
+  Export CSV ...................... downloads current week as CSV
+  ⋮ More actions .................. Copy last week / Clear week /
+                                    Print (window.print)
+  + floating button (mobile) ...... add row
+Analytics
+  Range 4W/8W/16W/ALL ............. re-filters every chart
+  Legend chips .................... toggle chart series on/off
+  Weight chart point click ........ opens Day Drawer
+  Day Drawer [‹ ›] ................ previous/next day;
+    "Edit in Sheets →" ............ → /sheets
+  PR card click ................... history modal (all attempts)
+  REPORT link ..................... → /plan-summary
+Plan Summary
+  Every console input ............. live-recomputes report
+  Client picker ................... autofills stats from mock data
+  Generate PDF .................... window.print() (print.css)
+  Reset ........................... defaults
+  Save to client .................. stores version (mock)
+
+TRAINER PAGES (T)
+─────────────────
+Coach
+  Range toggle .................... rescales KPIs/revenue
+  AT RISK banner click ............ filters roster to at-risk
+  Roster search ................... filters rows live
+  Filter chips (ALL/PT3X/PT2X/    ... filter + layoutId underline
+    WOMEN'S/AT RISK)
+  Roster row click ................ opens Client Drawer
+  Client Drawer actions ........... → /analytics · opens message
+                                    thread · focuses program builder
+  Schedule [+ Book] ............... booking simulation + toast
+  Program Builder: drag session ... move between days (HTML5 DnD)
+    [+ session] [+ exercise] ...... add rows; click cell → edit
+    sets/reps/kg/RPE; ↑↓ reorder; ✕ remove
+    [Duplicate week] .............. copies week forward
+    Assign checkboxes ............. writes shared overrides →
+                                    roster Program column updates
+    [SAVE] ........................ toast "Program updated — N
+                                    clients notified"
+    [+ New Program] ............... creates local draft in library
+  Messaging: thread click ......... opens conversation
+    suggested reply chips ......... insert text
+    Send .......................... appends bubble → typing… →
+                                    auto-reply (demo only)
+  Revenue legend .................. hover dim / click isolate series
+  Quick Actions: Onboard client /
+    Broadcast ..................... modal → local submit + toast
+    New program ................... scrolls to builder
+    Export ........................ → /plan-summary
+Enquiries inbox
+  Filter tabs ..................... ALL/RECEPTION/SENIOR/NEW ONLY
+  Card click ...................... detail drawer (full payload)
+  WhatsApp button ................. wa.me/<client number> new tab
+  Copy details .................... clipboard + toast
+  Mark as contacted ............... status → contacted (persisted),
+                                    sidebar badge decrements
+  Export CSV ...................... downloads all enquiries
+═══════════════════════════════════════════════════════════════════

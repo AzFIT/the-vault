@@ -1,0 +1,93 @@
+═══════════════════════════════════════════════════════════════════
+01 — APP MAP & ARCHITECTURE
+═══════════════════════════════════════════════════════════════════
+
+TECH STACK
+──────────
+React 19 + TypeScript + Vite 7 · Tailwind CSS 3.4 · shadcn/ui ·
+Framer Motion (app animation) · GSAP + Lenis (marketing scroll) ·
+Recharts (charts) · React Router 7 (BrowserRouter) · sonner (toasts)
+No backend: mock data (src/data/mock.ts) + localStorage persistence.
+
+ROUTE MAP
+─────────
+MARKETING SHELL (Layout.tsx = Navbar + Footer + WhatsApp float)
+  /                     Home landing page (12 sections, anchors:
+                        #the-gym #personal-training #group-classes
+                        #womens-health #memberships)
+  *                     NotFound 404 page
+
+APP SHELL (AppShell.tsx = sidebar + top bar + WhatsApp float)
+  /dashboard            Client Dashboard          (client view home)
+  /sheets               Tracking Sheets           (data entry)
+  /analytics            Analytics                 (charts/PRs)
+  /plan-summary         Plan Summary engine       (report generator)
+  /coach                Coach Dashboard           (trainer view home)
+  /admin/enquiries      Staff Enquiries Inbox
+
+TWO SHELLS, ONE APP
+───────────────────
+┌────────────────────────────────────────────────────────────────┐
+│ URL decides shell:                                             │
+│   marketing URLs  → Layout.tsx  (public branding)              │
+│   app URLs        → AppShell.tsx (product UI, pure black)      │
+│ LOGIN button on marketing navbar → /dashboard (enters app)     │
+│ CLIENT VIEW / COACH VIEW toggle in sidebar:                    │
+│   CLIENT VIEW → navigate('/dashboard')                         │
+│   COACH VIEW  → navigate('/coach')                             │
+│   (In YOUR app: replace toggle with role from auth token)      │
+└────────────────────────────────────────────────────────────────┘
+
+APP SHELL LAYOUT (shared by all app pages)
+──────────────────────────────────────────
+┌────────────┬─────────────────────────────────────────────────┐
+│ SIDEBAR    │ TOP BAR (64px)                                  │
+│ 240px      │ [EYEBROW / Page title]   [⌘K] [bell] [Help]     │
+│            ├─────────────────────────────────────────────────┤
+│ [logo]     │                                                 │
+│ DASHBOARD  │                                                 │
+│ SHEETS     │        <Outlet/> = current page content         │
+│ ANALYTICS  │        (200ms fade + 8px rise transition)       │
+│ COACH      │                                                 │
+│ PLAN SUMM. │                                                 │
+│ ── STAFF ──│                                                 │
+│ ENQUIRIES ⊙│  ⊙ = gold badge with count of NEW enquiries     │
+│            │                                                 │
+│ [CLIENT/   │                                                 │
+│  COACH tgl]│                                                 │
+│ [user chip]│  DK monogram (coach) / RC monogram (client)     │
+└────────────┴─────────────────────────────────────────────────┘
+Mobile: sidebar becomes hamburger drawer.
+Persistent: WhatsApp pill (bottom right, links to wa.me/<gym number>).
+
+FILE LAYOUT (src/)
+──────────────────
+App.tsx                 routes; every page is React.lazy + Suspense
+data/mock.ts            SINGLE source of all data (see file 06)
+lib/planBlueprint.ts    pure plan-calculation engine (no UI)
+lib/enquiries.ts        enquiry persistence (localStorage) + CSV
+lib/validation.ts       email/phone validators
+components/
+  Navbar.tsx Footer.tsx Layout.tsx        marketing shell
+  AppShell.tsx WhatsAppFloat.tsx          app shell
+  enquiry/              EnquiryModal + PassForm + MembershipForm
+  dashboard/            client dashboard widgets
+  sheets/               grid engine + 3 tabs + store
+  analytics/            charts, heatmap, PR board, day drawer
+  coach/                roster, drawer, builder, messaging, revenue
+  plan/                 InputConsole + Report + print.css
+pages/                  one file per route (thin composition layer)
+
+KEY ARCHITECTURE RULES (worth copying)
+──────────────────────────────────────
+1. Pages are THIN. All logic lives in components/ and lib/.
+2. One data file (mock.ts). Every page derives from it — never
+   invent parallel data inside a page.
+3. Pure engines separated from UI: planBlueprint.ts does math only;
+   the page renders its output. Unit-testable.
+4. localStorage acts as the "database" behind tiny modules
+   (enquiries.ts, sheets/store.ts) — each has ONE function
+   (submitEnquiry / store mutation) that you later swap for a
+   Supabase insert. Nothing else in the app changes.
+5. Every overlay (modal/drawer/palette): role="dialog", ESC to close,
+   backdrop click to close, body scroll lock.

@@ -1,0 +1,336 @@
+/**
+ * Workouts tab — sheets.md §3. Session accordion: logged sessions (read-only
+ * with Edit unlock) plus the planned upcoming session. Exercise combobox,
+ * + Add set duplication, done checkboxes, live session volume tween and the
+ * all-sets-complete white border flash.
+ */
+import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Check, ChevronDown, Lock, Pencil, Plus } from 'lucide-react'
+import { logsForWeek, LOG_WEEKS, volumeForWeek } from '@/data/mock'
+import { cn } from '@/lib/utils'
+import { CustomCell, EditableCell, HeaderCell } from './grid'
+import { useSheetGrid } from './useSheetGrid'
+import { ComboCell, TweenNumber } from './widgets'
+import { exerciseLibrary } from './libraries'
+import {
+  PLANNED_SESSION_KEY,
+  getSessionRows,
+  isSessionReadOnly,
+  sessionMeta,
+  sessionVolume,
+  useVault,
+  vaultActions,
+} from './store'
+import type { SessionMeta, SetRow } from './store'
+
+const parseNum = (s: string): number | null => {
+  const n = parseFloat(s.replace(/,/g, ''))
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+function SessionPanel({
+  meta,
+  open,
+  onToggle,
+}: {
+  meta: SessionMeta
+  open: boolean
+  onToggle: () => void
+}) {
+  const vault = useVault()
+  const rows = getSessionRows(vault, meta.key)
+  const readOnly = isSessionReadOnly(vault, meta.key)
+  const volume = sessionVolume(rows)
+  const allDone = rows.length > 0 && rows.every((r) => r.done)
+
+  // Restrained celebration: white border flash once when a session completes
+  const [flash, setFlash] = useState(false)
+  const [prevAllDone, setPrevAllDone] = useState(allDone)
+  if (allDone !== prevAllDone) {
+    setPrevAllDone(allDone)
+    if (allDone) setFlash(true)
+  }
+  useEffect(() => {
+    if (!flash) return
+    const t = setTimeout(() => setFlash(false), 1000)
+    return () => clearTimeout(t)
+  }, [flash])
+
+  const ctl = useSheetGrid(rows.length, 6, (_r, c) => {
+    if (readOnly) return { focusable: true, editable: false }
+    if (c === 1) return { focusable: false, editable: false } // set number
+    if (c === 5) return { focusable: true, editable: false } // done checkbox
+    return { focusable: true, editable: true }
+  })
+
+  const update = (row: SetRow, patch: Partial<SetRow>) =>
+    vaultActions.updateSetRow(meta.key, row.id, patch)
+
+  const commitNum = (row: SetRow, field: 'reps' | 'kg' | 'rpe') => (raw: string) => {
+    const n = parseNum(raw)
+    if (n === null) return
+    update(row, { [field]: field === 'reps' ? Math.round(n) : Math.round(n * 2) / 2 })
+  }
+
+  const dow = new Date(`${meta.date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short' })
+
+  return (
+    <div
+      className={cn(
+        'app-card overflow-hidden transition-colors duration-500',
+        flash && 'border-white',
+      )}
+    >
+      {/* Session header */}
+      <div className="flex w-full items-center gap-3 px-4 py-3 md:px-5">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-expanded={open}
+        >
+          <ChevronDown
+            className={cn('h-4 w-4 shrink-0 text-vault-muted transition-transform', open && 'rotate-180')}
+          />
+          <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
+            <span className="text-vault-muted">{dow} · </span>
+            {meta.label}
+            {meta.coach && <span className="text-vault-muted"> — with {meta.coach.split(' ')[0]}</span>}
+            {meta.planned && <span className="text-vault-muted"> (planned)</span>}
+          </span>
+          {meta.durationMin && (
+            <span className="hidden text-[12px] text-vault-muted tabular-nums sm:inline">
+              {meta.durationMin} min
+            </span>
+          )}
+          <span className="shrink-0 text-[14px] font-bold tabular-nums">
+            <TweenNumber value={volume} /> <span className="text-[11px] font-normal text-vault-muted">kg</span>
+          </span>
+        </button>
+        {readOnly ? (
+          <button
+            type="button"
+            onClick={() => vaultActions.toggleSessionLock(meta.key)}
+            className="btn-ghost shrink-0 text-[11px]"
+          >
+            <Lock className="h-3 w-3" /> Edit
+          </button>
+        ) : (
+          !meta.planned && (
+            <button
+              type="button"
+              onClick={() => vaultActions.toggleSessionLock(meta.key)}
+              className="btn-ghost shrink-0 text-[11px]"
+              title="Lock session"
+            >
+              <Pencil className="h-3 w-3" /> Editing
+            </button>
+          )
+        )}
+      </div>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.35, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div {...ctl.containerProps} className="overflow-x-auto outline-none">
+              <table className="w-full min-w-[640px] border-collapse" role="grid" aria-label={`${meta.label} sets`}>
+                <thead>
+                  <tr>
+                    <HeaderCell>Exercise</HeaderCell>
+                    <HeaderCell className="w-14 text-center">Set</HeaderCell>
+                    <HeaderCell className="w-20 text-right">Reps</HeaderCell>
+                    <HeaderCell className="w-20 text-right">Kg</HeaderCell>
+                    <HeaderCell className="w-20 text-right">RPE</HeaderCell>
+                    <HeaderCell className="w-14 text-center">✓</HeaderCell>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, r) => (
+                    <motion.tr
+                      key={row.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.25, delay: Math.min(r * 0.03, 0.4) }}
+                      className={cn('transition-colors hover:bg-vault-surface-2', r % 2 === 1 && 'bg-vault-surface')}
+                    >
+                      <ComboCell
+                        ctl={ctl}
+                        r={r}
+                        c={0}
+                        value={row.exercise}
+                        options={exerciseLibrary}
+                        getLabel={(x) => x}
+                        disabled={readOnly}
+                        onSelect={(name) => update(row, { exercise: name })}
+                        placeholder="Search exercises…"
+                      />
+                      <td className="h-11 border border-vault-border/60 px-3 text-center text-[13px] text-vault-muted tabular-nums">
+                        {row.set}
+                      </td>
+                      <EditableCell
+                        ctl={ctl} r={r} c={2}
+                        value={String(row.reps)}
+                        editable={!readOnly}
+                        className={row.done ? 'font-bold text-white' : 'text-vault-muted'}
+                        onCommit={commitNum(row, 'reps')}
+                      />
+                      <EditableCell
+                        ctl={ctl} r={r} c={3}
+                        value={String(row.kg)}
+                        editable={!readOnly}
+                        className={row.done ? 'font-bold text-white' : 'text-vault-muted'}
+                        onCommit={commitNum(row, 'kg')}
+                      />
+                      <EditableCell
+                        ctl={ctl} r={r} c={4}
+                        value={String(row.rpe)}
+                        editable={!readOnly}
+                        className={row.done ? 'text-white' : 'text-vault-muted'}
+                        onCommit={commitNum(row, 'rpe')}
+                      />
+                      <CustomCell ctl={ctl} r={r} c={5}>
+                        <button
+                          type="button"
+                          role="checkbox"
+                          aria-checked={row.done}
+                          aria-label={`Mark ${row.exercise} set ${row.set} done`}
+                          disabled={readOnly}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            update(row, { done: !row.done })
+                          }}
+                          className={cn(
+                            'mx-auto flex h-[18px] w-[18px] items-center justify-center border transition-colors',
+                            row.done ? 'border-white bg-white' : 'border-white/60 bg-transparent',
+                            readOnly && 'cursor-default opacity-60',
+                          )}
+                        >
+                          {row.done && <Check className="h-3 w-3 text-vault-bg" strokeWidth={3} />}
+                        </button>
+                      </CustomCell>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!readOnly && (
+              <div className="border-t border-vault-border/60 px-4 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => vaultActions.addSetRow(meta.key, rows[rows.length - 1]?.id ?? null)}
+                  className="btn-ghost text-[11px]"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add set
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+export default function WorkoutsTab({
+  weekDates,
+  weekIndex,
+  registerAddRow,
+}: {
+  weekDates: string[]
+  weekIndex: number
+  registerAddRow: (fn: (() => void) | null) => void
+}) {
+  const vault = useVault()
+  const metas: SessionMeta[] = []
+  for (const d of weekDates) {
+    const m = sessionMeta(d)
+    if (m) metas.push(m)
+  }
+  const isLatest = weekIndex === LOG_WEEKS - 1
+  if (isLatest) {
+    const planned = sessionMeta(PLANNED_SESSION_KEY)
+    if (planned) metas.push(planned)
+  }
+
+  const [openKey, setOpenKey] = useState<string | null>(
+    isLatest ? PLANNED_SESSION_KEY : (metas[0]?.key ?? null),
+  )
+
+  useEffect(() => {
+    registerAddRow(() => {
+      if (!openKey || isSessionReadOnly(vault, openKey)) return
+      const rows = getSessionRows(vault, openKey)
+      vaultActions.addSetRow(openKey, rows[rows.length - 1]?.id ?? null)
+    })
+    return () => registerAddRow(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openKey, vault])
+
+  // Live week summary (right rail)
+  const allRows = metas.flatMap((m) => getSessionRows(vault, m.key))
+  const doneSessions = metas.filter((m) => {
+    const rows = getSessionRows(vault, m.key)
+    return !m.planned && rows.length > 0 && rows.every((r) => r.done)
+  }).length
+  const totalVolume = sessionVolume(allRows)
+  const prevVolume = volumeForWeek(Math.max(0, weekIndex - 1))
+  const deltaPct = prevVolume > 0 ? Math.round(((totalVolume - prevVolume) / prevVolume) * 100) : 0
+  const workoutsLogged = logsForWeek(weekIndex).filter((l) => l.workout).length
+
+  return (
+    <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="min-w-0 flex-1 space-y-4">
+        {metas.length === 0 && (
+          <div className="app-card p-8 text-center text-[14px] text-vault-muted">
+            No sessions logged this week.
+          </div>
+        )}
+        {metas.map((m) => (
+          <SessionPanel
+            key={m.key}
+            meta={m}
+            open={openKey === m.key}
+            onToggle={() => setOpenKey(openKey === m.key ? null : m.key)}
+          />
+        ))}
+      </div>
+
+      {/* Right rail — THIS WEEK summary */}
+      <aside className="w-full shrink-0 lg:w-[280px]">
+        <div className="app-card p-5">
+          <p className="eyebrow">This week</p>
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="text-[13px] text-vault-muted">Sessions done</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums">
+                {doneSessions}
+                <span className="text-base font-normal text-vault-muted"> / {workoutsLogged + (isLatest ? 1 : 0)}</span>
+              </p>
+            </div>
+            <div>
+              <p className="text-[13px] text-vault-muted">Total volume</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums">
+                <TweenNumber value={totalVolume} />
+                <span className="text-base font-normal text-vault-muted"> kg</span>
+              </p>
+            </div>
+            <div className="border-t border-vault-border/60 pt-3">
+              <p className="text-[13px] text-vault-muted">vs last week</p>
+              <p className="mt-0.5 text-[15px] font-bold tabular-nums" style={{ color: 'var(--viz-2)' }}>
+                {deltaPct >= 0 ? '+' : ''}
+                {deltaPct}%
+              </p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  )
+}
