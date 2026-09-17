@@ -24,6 +24,7 @@ const PortalLogin = lazy(() => import('./pages/PortalLogin'))
 const FrontDesk = lazy(() => import('./pages/FrontDesk'))
 const FrontDeskCheckIn = lazy(() => import('./pages/FrontDeskCheckIn'))
 const FrontDeskPOS = lazy(() => import('./pages/FrontDeskPOS'))
+const FrontDeskFollowUps = lazy(() => import('./pages/FrontDeskFollowUps'))
 
 /** Centered gold spinner while a route chunk loads. */
 function PageFallback() {
@@ -78,6 +79,7 @@ export default function App() {
         <Route path="/portal/front-desk" element={page(<FrontDesk />)} />
         <Route path="/portal/check-in" element={page(<FrontDeskCheckIn />)} />
         <Route path="/portal/pos" element={page(<FrontDeskPOS />)} />
+        <Route path="/portal/follow-ups" element={page(<FrontDeskFollowUps />)} />
       </Route>
     </Routes>
   )
