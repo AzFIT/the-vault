@@ -10,7 +10,7 @@
  * bounced to their own home surfaces — each role sees only its own workflow.
  */
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { LogOut } from 'lucide-react'
 import { ENQUIRIES_CHANGED_EVENT, countNewEnquiries } from '@/lib/enquiries'
 import { getCurrentProfile, signOut } from '@/lib/staff'
@@ -19,6 +19,12 @@ interface PortalNavItem {
   label: string
   to?: string
   soon?: boolean
+}
+
+/** Topbar chrome per portal page — keeps the shell in sync with the route. */
+const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
+  '/portal': { eyebrow: 'Staff', title: 'Dashboard' },
+  '/portal/staff': { eyebrow: 'Manage', title: 'Staff directory' },
 }
 
 const NAV_OPERATE: PortalNavItem[] = [
@@ -36,7 +42,7 @@ const NAV_GROW: PortalNavItem[] = [
 ]
 const NAV_MANAGE: PortalNavItem[] = [
   { label: 'Services & Products', soon: true },
-  { label: 'Staff', soon: true },
+  { label: 'Staff', to: '/portal/staff' },
   { label: 'Settings', soon: true },
 ]
 
@@ -83,8 +89,10 @@ function NavEntry({ item, badge }: { item: PortalNavItem; badge?: number }) {
 
 export default function PortalShell() {
   const navigate = useNavigate()
+  const location = useLocation()
   const profile = getCurrentProfile()
   const [newCount, setNewCount] = useState(() => countNewEnquiries())
+  const chrome = PAGE_CHROME[location.pathname] ?? PAGE_CHROME['/portal']
 
   // Guard: owner only. Everyone else gets bounced to their own surface.
   useEffect(() => {
@@ -162,8 +170,8 @@ export default function PortalShell() {
         <div className="min-w-0 flex-1 lg:pl-60">
           <header className="sticky top-0 z-30 flex h-16 flex-wrap items-center gap-3 border-b border-vault-border bg-vault-bg/90 px-4 backdrop-blur-md md:px-8">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-vault-muted">Staff</p>
-              <h1 className="text-lg font-bold leading-tight">Dashboard</h1>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-vault-muted">{chrome.eyebrow}</p>
+              <h1 className="text-lg font-bold leading-tight">{chrome.title}</h1>
             </div>
             <span className="ml-auto border border-gold/50 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-gold">
               Tester mode — signed in as {profile.name}

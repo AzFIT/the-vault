@@ -12,6 +12,7 @@ const Sheets = lazy(() => import('./pages/Sheets'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const Coach = lazy(() => import('./pages/Coach'))
 const PortalOwner = lazy(() => import('./pages/PortalOwner'))
+const StaffDirectory = lazy(() => import('./pages/StaffDirectory'))
 const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -53,6 +54,7 @@ export default function App() {
       {/* Owner portal — separate staff surface, owner-gated (tester sign-in) */}
       <Route element={<PortalShell />}>
         <Route path="/portal" element={page(<PortalOwner />)} />
+        <Route path="/portal/staff" element={page(<StaffDirectory />)} />
       </Route>
 
       {/* Retired management view — graduated into the owner portal */}
