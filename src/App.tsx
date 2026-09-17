@@ -4,6 +4,7 @@ import { Navigate, Routes, Route } from 'react-router'
 import Layout from './components/Layout'
 import AppShell from './components/AppShell'
 import PortalShell from './components/PortalShell'
+import FrontDeskShell from './components/FrontDeskShell'
 
 // Code-split pages — each route chunk loads on demand.
 const Home = lazy(() => import('./pages/Home'))
@@ -21,6 +22,7 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 const Intake = lazy(() => import('./pages/Intake'))
 const PortalLogin = lazy(() => import('./pages/PortalLogin'))
 const FrontDesk = lazy(() => import('./pages/FrontDesk'))
+const FrontDeskCheckIn = lazy(() => import('./pages/FrontDeskCheckIn'))
 
 /** Centered gold spinner while a route chunk loads. */
 function PageFallback() {
@@ -69,7 +71,12 @@ export default function App() {
 
       {/* Management portal — Phase A tester sign-in (no real auth yet) */}
       <Route path="/portal/login" element={page(<PortalLogin />)} />
-      <Route path="/portal/front-desk" element={page(<FrontDesk />)} />
+
+      {/* Front desk — separate front-desk surface, role-gated (tester sign-in) */}
+      <Route element={<FrontDeskShell />}>
+        <Route path="/portal/front-desk" element={page(<FrontDesk />)} />
+        <Route path="/portal/check-in" element={page(<FrontDeskCheckIn />)} />
+      </Route>
     </Routes>
   )
 }
