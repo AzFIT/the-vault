@@ -34,6 +34,7 @@ import {
   salesToday,
 } from '@/lib/staff'
 import type { ShiftEventType, StaffProfile } from '@/lib/staff'
+import { QUICK_SALE_ITEMS as SALE_ITEMS, formatHKD } from '@/lib/pos'
 
 /** Mock baselines for the current shift — live events add on top. */
 const BASE = {
@@ -61,13 +62,6 @@ const LEADERBOARD = [
   { initials: 'TM', name: 'Tarryn Maree', meta: 'coach', pts: 79, you: false },
 ]
 
-const SALE_ITEMS = [
-  { label: 'Day pass', amount: 180 },
-  { label: 'Class pack 10', amount: 1500 },
-  { label: 'PT 3-pack', amount: 2100 },
-  { label: 'Merch — tee', amount: 280 },
-]
-
 const TYPE_META: Record<ShiftEventType, { pill: string; cls: string }> = {
   checkin: { pill: 'Check-in', cls: 'border-[#7ec98f] text-[#7ec98f]' },
   sale: { pill: 'Sale', cls: 'border-white text-white' },
@@ -75,10 +69,6 @@ const TYPE_META: Record<ShiftEventType, { pill: string; cls: string }> = {
   message: { pill: 'Message', cls: 'border-white/70 text-white/70' },
   signup: { pill: 'Sign-up', cls: 'border-gold text-gold' },
   followup: { pill: 'Follow-up', cls: 'border-gold text-gold' },
-}
-
-function formatHKD(n: number): string {
-  return `HK$${n.toLocaleString('en-HK')}`
 }
 
 function elapsedLabel(): string {
@@ -120,7 +110,7 @@ function QuickAdd({ profile, onLogged }: { profile: StaffProfile; onLogged: () =
     e.preventDefault()
     if (kind === 'sale') {
       const item = SALE_ITEMS[saleItem]
-      recordEvent(profile.id, 'sale', `Sale — ${item.label} ${formatHKD(item.amount)}`)
+      recordEvent(profile.id, 'sale', `Sale — ${item.label} ${formatHKD(item.price)}`)
     } else if (kind === 'call') {
       if (!who.trim()) return
       recordEvent(profile.id, 'message', `${channel} — ${who.trim()}`)
@@ -181,7 +171,7 @@ function QuickAdd({ profile, onLogged }: { profile: StaffProfile; onLogged: () =
                   <select value={saleItem} onChange={(e) => setSaleItem(Number(e.target.value))} className={selectCls}>
                     {SALE_ITEMS.map((s, i) => (
                       <option key={s.label} value={i}>
-                        {s.label} — {formatHKD(s.amount)}
+                        {s.label} — {formatHKD(s.price)}
                       </option>
                     ))}
                   </select>
@@ -281,6 +271,7 @@ export default function FrontDesk() {
     () => ({
       checkins: countToday(profile?.id ?? '', 'checkin'),
       sales: salesToday(profile?.id ?? ''),
+      stock: countToday(profile?.id ?? '', 'stock'),
       messages: countToday(profile?.id ?? '', 'message'),
       followupsDone: countToday(profile?.id ?? '', 'followup'),
       pts: pointsToday(profile?.id ?? ''),
@@ -302,7 +293,7 @@ export default function FrontDesk() {
   const kpis = [
     { label: 'Total check-ins', icon: Users, value: BASE.checkins + live.checkins, sub: 'members · PT · drop-ins' },
     { label: 'Items sold', icon: Receipt, value: BASE.itemsSold + live.events.filter((e) => e.type === 'sale').length, sub: `POS · ${formatHKD(BASE.salesHKD + live.sales)}` },
-    { label: 'Stock adjustments', icon: Package, value: BASE.stock, sub: '2 restock · 1 transfer' },
+    { label: 'Stock adjustments', icon: Package, value: BASE.stock + live.stock, sub: '2 restock · 1 transfer + live' },
     { label: 'Calls & messages', icon: Phone, value: BASE.messages + live.messages, sub: 'calls · WhatsApp replies' },
     { label: 'Sign-ups / trials', icon: UserPlus, value: BASE.signups, sub: '2 memberships · 2 trials' },
     { label: 'Productivity score', icon: Star, value: BASE.score, sub: '▲ 6 pts vs yesterday', gold: true, live: live.pts },

@@ -25,7 +25,7 @@ interface DeskNavItem {
 const NAV_TODAY: DeskNavItem[] = [
   { label: 'My shift', to: '/portal/front-desk' },
   { label: 'Check In', to: '/portal/check-in' },
-  { label: 'POS', soon: true },
+  { label: 'POS', to: '/portal/pos' },
   { label: 'Follow-ups', to: '/portal/front-desk', hash: '#reminders' },
 ]
 const NAV_STUDIO: DeskNavItem[] = [
@@ -37,6 +37,7 @@ const NAV_STUDIO: DeskNavItem[] = [
 const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
   '/portal/front-desk': { eyebrow: 'Staff', title: 'My shift' },
   '/portal/check-in': { eyebrow: 'Staff', title: 'Check in' },
+  '/portal/pos': { eyebrow: 'Staff', title: 'Point of sale' },
 }
 
 function navCls(isActive: boolean) {
