@@ -25,6 +25,7 @@ interface PortalNavItem {
 const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
   '/portal': { eyebrow: 'Staff', title: 'Dashboard' },
   '/portal/staff': { eyebrow: 'Manage', title: 'Staff directory' },
+  '/portal/clients': { eyebrow: 'Grow', title: 'Clients' },
 }
 
 const NAV_OPERATE: PortalNavItem[] = [
@@ -34,7 +35,7 @@ const NAV_OPERATE: PortalNavItem[] = [
   { label: 'Rooms', soon: true },
 ]
 const NAV_GROW: PortalNavItem[] = [
-  { label: 'Clients', soon: true },
+  { label: 'Clients', to: '/portal/clients' },
   { label: 'Enquiries', to: '/admin/enquiries' },
   { label: 'Point of Sale', soon: true },
   { label: 'Insights', soon: true },
