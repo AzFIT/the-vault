@@ -12,7 +12,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, Circle } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react'
 import {
   coachClients,
   formatHKD,
@@ -22,7 +22,10 @@ import {
 } from '@/data/mock'
 import { CountUp, SectionHeader } from '@/components/coach/shared'
 import { NOW_LABEL_MINUTES, TODAY_SCHEDULE, timeToMinutes } from '@/components/coach/scheduleData'
-import { countNewEnquiries } from '@/lib/enquiries'
+import { countNewEnquiries, listEnquiries } from '@/lib/enquiries'
+import KpiSheet from '@/components/KpiSheet'
+import type { KpiColumn } from '@/components/KpiSheet'
+import { KPI_MASK } from '@/components/KpiSheet'
 
 const today = new Date()
 const todayLabel = today.toLocaleDateString('en-GB', {
@@ -69,8 +72,19 @@ const YESTERDAY = [
 ]
 
 // ---------------------------------------------------------------------------
-// KPI row
+// KPI row — every card opens a full "sheets view" of its underlying stats;
+// an eye toggle masks all figures for privacy (persisted).
 // ---------------------------------------------------------------------------
+
+const KPI_HIDDEN_KEY = 'vault-kpi-hidden'
+
+interface SheetDef {
+  title: string
+  subtitle: string
+  columns: KpiColumn[]
+  rows: Record<string, string | number>[]
+  filterKey?: string
+}
 
 function KpiRow() {
   const last = monthlyRevenue[monthlyRevenue.length - 1]
@@ -87,9 +101,119 @@ function KpiRow() {
       100,
   )
   const newEnquiries = countNewEnquiries()
+  const [hidden, setHidden] = useState(() => localStorage.getItem(KPI_HIDDEN_KEY) === '1')
+  const [sheet, setSheet] = useState<SheetDef | null>(null)
+
+  const toggleHidden = () =>
+    setHidden((v) => {
+      localStorage.setItem(KPI_HIDDEN_KEY, v ? '0' : '1')
+      return !v
+    })
+
+  const sheets: Record<string, SheetDef> = {
+    revenue: {
+      title: 'Revenue this month',
+      subtitle: 'Monthly breakdown by stream — PT, memberships, classes',
+      columns: [
+        { key: 'month', label: 'Month' },
+        { key: 'pt', label: 'PT', align: 'num' },
+        { key: 'memberships', label: 'Memberships', align: 'num' },
+        { key: 'classes', label: 'Classes', align: 'num' },
+        { key: 'total', label: 'Total', align: 'num' },
+        { key: 'sessions', label: 'Sessions', align: 'num' },
+        { key: 'newClients', label: 'New clients', align: 'num' },
+      ],
+      rows: [...monthlyRevenue]
+        .reverse()
+        .map((m) => ({
+          month: m.label,
+          pt: m.pt,
+          memberships: m.memberships,
+          classes: m.classes,
+          total: m.total,
+          sessions: m.sessionsDelivered,
+          newClients: m.newClients,
+        })),
+    },
+    sessions: {
+      title: 'Sessions delivered',
+      subtitle: 'PT sessions and small-group sessions run per month',
+      columns: [
+        { key: 'month', label: 'Month' },
+        { key: 'sessions', label: 'Sessions', align: 'num' },
+        { key: 'newClients', label: 'New clients', align: 'num' },
+      ],
+      rows: [...monthlyRevenue].reverse().map((m) => ({ month: m.label, sessions: m.sessionsDelivered, newClients: m.newClients })),
+    },
+    occupancy: {
+      title: "Today's class occupancy",
+      subtitle: `${classRows.length} classes running today — booked vs capacity`,
+      columns: [
+        { key: 'time', label: 'Time' },
+        { key: 'session', label: 'Session' },
+        { key: 'room', label: 'Room' },
+        { key: 'booked', label: 'Booked', align: 'num' },
+        { key: 'capacity', label: 'Capacity', align: 'num' },
+        { key: 'fill', label: 'Fill %', align: 'num' },
+      ],
+      rows: classRows.map((s) => {
+        const cap = gymClasses.find((g) => g.id === s.classId)?.capacity ?? 6
+        const booked = s.booked ?? 0
+        return {
+          time: s.time,
+          session: s.label,
+          room: s.note ?? '—',
+          booked,
+          capacity: cap,
+          fill: `${Math.round((booked / cap) * 100)}%`,
+        }
+      }),
+    },
+    clients: {
+      title: 'Active clients',
+      subtitle: 'Every active client on the roster with adherence',
+      columns: [
+        { key: 'name', label: 'Client' },
+        { key: 'tier', label: 'Tier' },
+        { key: 'goal', label: 'Goal' },
+        { key: 'adherence', label: 'Adherence', align: 'num' },
+        { key: 'coach', label: 'Coach' },
+        { key: 'since', label: 'Since' },
+      ],
+      filterKey: 'tier',
+      rows: coachClients.map((c) => ({
+        name: c.name,
+        tier: c.tier,
+        goal: c.goal,
+        adherence: `${c.adherence}%`,
+        coach: getCoachById(c.coachId)?.name ?? '—',
+        since: c.memberSince,
+      })),
+    },
+    enquiries: {
+      title: 'New enquiries',
+      subtitle: 'Everything captured by the intake funnel',
+      columns: [
+        { key: 'date', label: 'Date' },
+        { key: 'name', label: 'Name' },
+        { key: 'route', label: 'Route' },
+        { key: 'plan', label: 'Plan' },
+        { key: 'status', label: 'Status' },
+      ],
+      filterKey: 'route',
+      rows: listEnquiries().map((e) => ({
+        date: new Date(e.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        name: String(e.payload?.name ?? '—'),
+        route: e.route === 'reception' ? 'Reception' : 'Membership',
+        plan: e.planLabel,
+        status: e.status,
+      })),
+    },
+  }
 
   const cards = [
     {
+      key: 'revenue',
       label: 'Revenue this month',
       value: last.total,
       format: (v: number) => formatHKD(v),
@@ -97,6 +221,7 @@ function KpiRow() {
       up: revDelta >= 0,
     },
     {
+      key: 'sessions',
       label: 'Sessions delivered',
       value: last.sessionsDelivered,
       format: (v: number) => String(Math.round(v)),
@@ -104,6 +229,7 @@ function KpiRow() {
       up: sesDelta >= 0,
     },
     {
+      key: 'occupancy',
       label: 'Occupancy today',
       value: occupancy,
       format: (v: number) => `${Math.round(v)}%`,
@@ -111,6 +237,7 @@ function KpiRow() {
       up: occupancy >= 70,
     },
     {
+      key: 'clients',
       label: 'Active clients',
       value: coachClients.length,
       format: (v: number) => String(Math.round(v)),
@@ -118,6 +245,7 @@ function KpiRow() {
       up: true,
     },
     {
+      key: 'enquiries',
       label: 'New enquiries',
       value: newEnquiries,
       format: (v: number) => String(Math.round(v)),
@@ -128,29 +256,57 @@ function KpiRow() {
   ]
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-      {cards.map((c, i) => (
-        <motion.div
-          key={c.label}
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: i * 0.07, ease: 'easeOut' }}
-          className={`app-card p-5 ${c.gold ? 'border-gold/50' : ''}`}
+    <div>
+      <div className="mb-2 flex items-center justify-end gap-2">
+        <span className="text-[11px] text-vault-faint">{hidden ? 'Figures hidden' : 'Figures visible'}</span>
+        <button
+          type="button"
+          onClick={toggleHidden}
+          aria-pressed={hidden}
+          aria-label={hidden ? 'Show KPI figures' : 'Hide KPI figures'}
+          title={hidden ? 'Show KPI figures' : 'Hide KPI figures'}
+          className="flex h-8 w-8 items-center justify-center border border-vault-border text-vault-muted transition-colors hover:border-white/40 hover:text-white"
         >
-          <p className="text-[11px] uppercase tracking-[0.16em] text-vault-muted">{c.label}</p>
-          <p className={`tnum mt-3 text-[26px] font-bold leading-none md:text-[30px] ${c.gold ? 'text-gold' : 'text-white'}`}>
-            <CountUp value={c.value} format={c.format} />
-          </p>
-          <p className="mt-2.5 flex items-center gap-1 text-[12px] text-vault-muted">
-            {c.up ? (
-              <ArrowUpRight className="h-3.5 w-3.5 text-gold" />
-            ) : (
-              <ArrowDownRight className="h-3.5 w-3.5 text-vault-muted" />
-            )}
-            {c.sub}
-          </p>
-        </motion.div>
-      ))}
+          {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        {cards.map((c, i) => (
+          <motion.button
+            key={c.key}
+            type="button"
+            onClick={() => setSheet(sheets[c.key])}
+            title={`Open ${c.label} detail`}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: i * 0.07, ease: 'easeOut' }}
+            className={`app-card p-5 text-left transition-colors hover:border-white/40 ${c.gold ? 'border-gold/50' : ''}`}
+          >
+            <p className="text-[11px] uppercase tracking-[0.16em] text-vault-muted">{c.label}</p>
+            <p className={`tnum mt-3 text-[26px] font-bold leading-none md:text-[30px] ${c.gold ? 'text-gold' : 'text-white'}`}>
+              {hidden ? KPI_MASK : <CountUp value={c.value} format={c.format} />}
+            </p>
+            <p className="mt-2.5 flex items-center gap-1 text-[12px] text-vault-muted">
+              {c.up ? (
+                <ArrowUpRight className="h-3.5 w-3.5 text-gold" />
+              ) : (
+                <ArrowDownRight className="h-3.5 w-3.5 text-vault-muted" />
+              )}
+              {hidden ? KPI_MASK : c.sub}
+            </p>
+          </motion.button>
+        ))}
+      </div>
+      {sheet && (
+        <KpiSheet
+          title={sheet.title}
+          subtitle={sheet.subtitle}
+          columns={sheet.columns}
+          rows={sheet.rows}
+          filterKey={sheet.filterKey}
+          onClose={() => setSheet(null)}
+        />
+      )}
     </div>
   )
 }

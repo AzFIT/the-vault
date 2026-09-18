@@ -6,14 +6,18 @@
  * Modules that don't exist yet render as disabled "Soon" items rather than
  * dead links.
  *
+ * Chrome extras: collapsible sidebar (persisted), a mobile drawer with the
+ * same navigation, and back / forward / home buttons in the topbar.
+ *
  * Guard: no session → /portal/login. Front desk and coach sessions are
  * bounced to their own home surfaces — each role sees only its own workflow.
  */
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { LogOut } from 'lucide-react'
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { ENQUIRIES_CHANGED_EVENT, countNewEnquiries } from '@/lib/enquiries'
 import { getCurrentProfile, signOut } from '@/lib/staff'
+import NavButtons from '@/components/NavButtons'
 
 interface PortalNavItem {
   label: string
@@ -48,44 +52,156 @@ const NAV_MANAGE: PortalNavItem[] = [
   { label: 'Settings', soon: true },
 ]
 
-function navCls(isActive: boolean) {
+const COLLAPSE_KEY = 'vault-sidebar-collapsed'
+
+function navCls(isActive: boolean, collapsed: boolean) {
   return `relative flex w-full items-center gap-3 px-3 py-2.5 text-left text-[13px] transition-colors ${
+    collapsed ? 'justify-center px-0' : ''
+  } ${
     isActive
       ? 'bg-white/[0.08] text-white'
       : 'text-vault-muted hover:bg-white/[0.04] hover:text-white'
   }`
 }
 
-function NavEntry({ item, badge }: { item: PortalNavItem; badge?: number }) {
+function NavEntry({ item, badge, collapsed }: { item: PortalNavItem; badge?: number; collapsed: boolean }) {
   if (item.soon || !item.to) {
     return (
       <button
         type="button"
         disabled
-        title="Coming in a later phase"
-        className="relative flex w-full cursor-not-allowed items-center gap-3 px-3 py-2.5 text-left text-[13px] text-vault-faint"
+        title={`${item.label} — coming in a later phase`}
+        className={`relative flex w-full cursor-not-allowed items-center gap-3 px-3 py-2.5 text-left text-[13px] text-vault-faint ${
+          collapsed ? 'justify-center px-0' : ''
+        }`}
       >
         <span className="h-1.5 w-1.5 border border-vault-faint/60" />
-        {item.label}
-        <span className="ml-auto text-[9px] uppercase tracking-[0.14em] text-vault-faint">Soon</span>
+        {!collapsed && (
+          <>
+            {item.label}
+            <span className="ml-auto text-[9px] uppercase tracking-[0.14em] text-vault-faint">Soon</span>
+          </>
+        )}
       </button>
     )
   }
   return (
-    <NavLink to={item.to} end={item.to === '/portal'} className={({ isActive }) => navCls(isActive)}>
+    <NavLink
+      to={item.to}
+      end={item.to === '/portal'}
+      title={item.label}
+      className={({ isActive }) => navCls(isActive, collapsed)}
+    >
       {({ isActive }) => (
         <>
           {isActive && <span className="absolute left-0 top-0 h-full w-0.5 bg-gold" aria-hidden />}
-          <span className={`h-1.5 w-1.5 ${isActive ? 'bg-gold' : 'border border-vault-faint'}`} />
-          {item.label}
-          {badge ? (
+          <span className={`h-1.5 w-1.5 shrink-0 ${isActive ? 'bg-gold' : 'border border-vault-faint'}`} />
+          {!collapsed && item.label}
+          {!collapsed && badge ? (
             <span className="ml-auto rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-medium leading-none text-black">
               {badge}
             </span>
           ) : null}
+          {collapsed && badge ? (
+            <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />
+          ) : null}
         </>
       )}
     </NavLink>
+  )
+}
+
+function SidebarContent({
+  collapsed,
+  newCount,
+  onNavigate,
+}: {
+  collapsed: boolean
+  newCount: number
+  onNavigate?: () => void
+}) {
+  const navigate = useNavigate()
+  const profile = getCurrentProfile()
+  const signOutAndLeave = () => {
+    signOut()
+    navigate('/portal/login', { replace: true })
+  }
+  return (
+    <>
+      <div className={`flex items-center gap-3 border-b border-vault-border px-2 pb-4 pt-1 ${collapsed ? 'justify-center' : ''}`}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-gold text-[13px] font-bold text-gold">V</span>
+        {!collapsed && <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>}
+      </div>
+      {!collapsed && <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Operate</p>}
+      {collapsed && <div className="pt-3" />}
+      {NAV_OPERATE.map((item) => (
+        <NavEntry key={item.label} item={item} collapsed={collapsed} />
+      ))}
+      {!collapsed && <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Grow</p>}
+      {collapsed && <div className="pt-3" />}
+      {NAV_GROW.map((item) => (
+        <NavEntry
+          key={item.label}
+          item={item}
+          collapsed={collapsed}
+          badge={item.label === 'Enquiries' ? newCount || undefined : undefined}
+        />
+      ))}
+      {!collapsed && <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Manage</p>}
+      {collapsed && <div className="pt-3" />}
+      {NAV_MANAGE.map((item) => (
+        <NavEntry key={item.label} item={item} collapsed={collapsed} />
+      ))}
+      {onNavigate && (
+        <div className="mt-4 border-t border-vault-border pt-3">
+          <Link to="/" onClick={onNavigate} className="block px-3 text-[12px] text-vault-muted hover:text-white">
+            ← Homepage
+          </Link>
+        </div>
+      )}
+      <div className="mt-auto">
+        {!collapsed ? (
+          <div className="flex items-center gap-3 border-t border-vault-border px-2 pt-4">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted">
+              {profile?.initials}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium">{profile?.name}</p>
+              <p className="text-[11px] text-vault-muted">
+                {profile?.roleLabel} · {profile?.staffNo}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={signOutAndLeave}
+              aria-label="Sign out"
+              title="Sign out"
+              className="p-1.5 text-vault-muted transition-colors hover:text-white"
+            >
+              <LogOut className="h-4 w-4" strokeWidth={1.5} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 border-t border-vault-border pt-3">
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted"
+              title={`${profile?.name} · ${profile?.roleLabel}`}
+            >
+              {profile?.initials}
+            </span>
+            <button
+              type="button"
+              onClick={signOutAndLeave}
+              aria-label="Sign out"
+              title="Sign out"
+              className="p-1 text-vault-muted transition-colors hover:text-white"
+            >
+              <LogOut className="h-4 w-4" strokeWidth={1.5} />
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -94,6 +210,8 @@ export default function PortalShell() {
   const location = useLocation()
   const profile = getCurrentProfile()
   const [newCount, setNewCount] = useState(() => countNewEnquiries())
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
+  const [mobileOpen, setMobileOpen] = useState(false)
   const chrome = PAGE_CHROME[location.pathname] ?? PAGE_CHROME['/portal']
 
   // Guard: owner only. Everyone else gets bounced to their own surface.
@@ -120,65 +238,70 @@ export default function PortalShell() {
     )
   }
 
-  const signOutAndLeave = () => {
-    signOut()
-    navigate('/portal/login', { replace: true })
-  }
+  const toggleCollapsed = () =>
+    setCollapsed((v) => {
+      localStorage.setItem(COLLAPSE_KEY, v ? '0' : '1')
+      return !v
+    })
 
   return (
     <div className="app-black min-h-[100dvh] bg-vault-bg text-white">
       <div className="flex">
-        {/* Sidebar */}
-        <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-vault-border bg-vault-surface p-3 lg:flex">
-          <div className="flex items-center gap-3 border-b border-vault-border px-2 pb-4 pt-1">
-            <span className="flex h-9 w-9 items-center justify-center border border-gold text-[13px] font-bold text-gold">V</span>
-            <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>
-          </div>
-          <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Operate</p>
-          {NAV_OPERATE.map((item) => (
-            <NavEntry key={item.label} item={item} />
-          ))}
-          <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Grow</p>
-          {NAV_GROW.map((item) => (
-            <NavEntry key={item.label} item={item} badge={item.label === 'Enquiries' ? newCount || undefined : undefined} />
-          ))}
-          <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Manage</p>
-          {NAV_MANAGE.map((item) => (
-            <NavEntry key={item.label} item={item} />
-          ))}
-          <div className="mt-auto flex items-center gap-3 border-t border-vault-border px-2 pt-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted">
-              {profile.initials}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium">{profile.name}</p>
-              <p className="text-[11px] text-vault-muted">
-                {profile.roleLabel} · {profile.staffNo}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={signOutAndLeave}
-              aria-label="Sign out"
-              title="Sign out"
-              className="p-1.5 text-vault-muted transition-colors hover:text-white"
-            >
-              <LogOut className="h-4 w-4" strokeWidth={1.5} />
-            </button>
-          </div>
+        {/* Sidebar — collapsible on desktop, hidden on mobile (drawer below) */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-vault-border bg-vault-surface p-3 transition-[width] duration-200 lg:flex ${
+            collapsed ? 'w-16' : 'w-60'
+          }`}
+        >
+          <SidebarContent collapsed={collapsed} newCount={newCount} />
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="mt-3 flex w-full items-center justify-center gap-2 border-t border-vault-border pt-3 text-vault-muted transition-colors hover:text-white"
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" strokeWidth={1.5} />
+            ) : (
+              <>
+                <PanelLeftClose className="h-4 w-4" strokeWidth={1.5} />
+                <span className="text-[10px] uppercase tracking-[0.14em]">Collapse</span>
+              </>
+            )}
+          </button>
         </aside>
 
+        {/* Mobile drawer */}
+        {mobileOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div className="absolute inset-0 bg-black/70" onClick={() => setMobileOpen(false)} aria-hidden />
+            <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-vault-border bg-vault-surface p-3">
+              <SidebarContent collapsed={false} newCount={newCount} onNavigate={() => setMobileOpen(false)} />
+            </aside>
+          </div>
+        )}
+
         {/* Main */}
-        <div className="min-w-0 flex-1 lg:pl-60">
+        <div className={`min-w-0 flex-1 transition-[padding] duration-200 ${collapsed ? 'lg:pl-16' : 'lg:pl-60'}`}>
           <header className="sticky top-0 z-30 flex h-16 flex-wrap items-center gap-3 border-b border-vault-border bg-vault-bg/90 px-4 backdrop-blur-md md:px-8">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+              className="flex h-8 w-8 items-center justify-center border border-vault-border text-vault-muted hover:text-white lg:hidden"
+            >
+              <Menu className="h-4 w-4" strokeWidth={1.5} />
+            </button>
+            <NavButtons homeTo="/portal" />
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-vault-muted">{chrome.eyebrow}</p>
               <h1 className="text-lg font-bold leading-tight">{chrome.title}</h1>
             </div>
-            <span className="ml-auto border border-gold/50 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-gold">
+            <span className="ml-auto hidden border border-gold/50 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-gold sm:inline-block">
               Tester mode — signed in as {profile.name}
             </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted">
+            <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted sm:flex">
               {profile.initials}
             </span>
           </header>
@@ -186,10 +309,6 @@ export default function PortalShell() {
             <Outlet />
           </main>
         </div>
-      </div>
-      {/* Mobile: portal is desktop-first for now; offer the essentials */}
-      <div className="border-t border-vault-border p-3 lg:hidden">
-        <Link to="/" className="text-[12px] text-vault-muted">← Homepage</Link>
       </div>
     </div>
   )

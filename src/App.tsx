@@ -80,6 +80,7 @@ export default function App() {
         <Route path="/portal/check-in" element={page(<FrontDeskCheckIn />)} />
         <Route path="/portal/pos" element={page(<FrontDeskPOS />)} />
         <Route path="/portal/follow-ups" element={page(<FrontDeskFollowUps />)} />
+        <Route path="/portal/desk-schedule" element={page(<PortalSchedule />)} />
       </Route>
     </Routes>
   )

@@ -10,6 +10,8 @@ import {
   LayoutDashboard,
   Menu,
   MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Table2,
   Users,
@@ -18,6 +20,7 @@ import {
 import { Toaster } from 'sonner'
 import { coachClients, programs } from '@/data/mock'
 import { ENQUIRIES_CHANGED_EVENT, countNewEnquiries } from '@/lib/enquiries'
+import NavButtons from '@/components/NavButtons'
 import WhatsAppFloat from './WhatsAppFloat'
 
 const NAV_ITEMS = [
@@ -52,7 +55,13 @@ function navLinkCls(isActive: boolean) {
   }`
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({
+  onNavigate,
+  collapsed,
+}: {
+  onNavigate?: () => void
+  collapsed?: boolean
+}) {
   const location = useLocation()
   const navigate = useNavigate()
   const isCoachView = location.pathname.startsWith('/coach')
@@ -71,9 +80,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-vault-border px-5">
+      <div className={`flex h-16 items-center gap-3 border-b border-vault-border px-5 ${collapsed ? 'justify-center px-0' : ''}`}>
         <img src={asset('logo-gold.png')} alt="The Vault" className="h-9 w-9 object-contain" />
-        <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>
+        {!collapsed && <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>}
       </div>
 
       {/* Nav */}
@@ -83,41 +92,49 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             key={to}
             to={to}
             onClick={onNavigate}
-            className={({ isActive }) => navLinkCls(isActive)}
+            title={label}
+            className={({ isActive }) => `${navLinkCls(isActive)} ${collapsed ? 'justify-center px-0' : ''}`}
           >
             {({ isActive }) => (
               <>
                 {isActive && (
                   <span className="absolute left-0 top-0 h-full w-0.5 bg-gold" aria-hidden />
                 )}
-                <Icon className="h-4 w-4" strokeWidth={1.5} />
-                <span>{label}</span>
+                <Icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                <span className={collapsed ? 'sr-only' : ''}>{label}</span>
               </>
             )}
           </NavLink>
         ))}
 
         {/* Staff section */}
-        <p className="px-3 pb-1 pt-5 text-[10px] uppercase tracking-[0.2em] text-vault-faint">
-          Staff
-        </p>
+        {!collapsed && (
+          <p className="px-3 pb-1 pt-5 text-[10px] uppercase tracking-[0.2em] text-vault-faint">
+            Staff
+          </p>
+        )}
+        {collapsed && <div className="pt-4" />}
         <NavLink
           to="/admin/enquiries"
           onClick={onNavigate}
-          className={({ isActive }) => navLinkCls(isActive)}
+          title="Enquiries"
+          className={({ isActive }) => `${navLinkCls(isActive)} ${collapsed ? 'justify-center px-0' : ''}`}
         >
           {({ isActive }) => (
             <>
               {isActive && (
                 <span className="absolute left-0 top-0 h-full w-0.5 bg-gold" aria-hidden />
               )}
-              <Inbox className="h-4 w-4" strokeWidth={1.5} />
-              <span>Enquiries</span>
-              {newCount > 0 && (
-                <span className="tnum ml-auto rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-medium leading-none text-black">
-                  {newCount}
-                </span>
-              )}
+              <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+              <span className={collapsed ? 'sr-only' : ''}>Enquiries</span>
+              {newCount > 0 &&
+                (collapsed ? (
+                  <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />
+                ) : (
+                  <span className="tnum ml-auto rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-medium leading-none text-black">
+                    {newCount}
+                  </span>
+                ))}
             </>
           )}
         </NavLink>
@@ -125,31 +142,60 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Mode switcher + user chip */}
       <div className="border-t border-vault-border p-4">
-        <div className="mb-4 grid grid-cols-2 border border-vault-border text-[10px] uppercase tracking-[0.12em]">
-          <button
-            onClick={() => {
-              navigate('/dashboard')
-              onNavigate?.()
-            }}
-            className={`px-2 py-2 transition-colors ${
-              !isCoachView ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white'
-            }`}
-          >
-            Client View
-          </button>
-          <button
-            onClick={() => {
-              navigate('/coach')
-              onNavigate?.()
-            }}
-            className={`px-2 py-2 transition-colors ${
-              isCoachView ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white'
-            }`}
-          >
-            Coach View
-          </button>
-        </div>
-        <div className="flex items-center gap-3">
+        {collapsed ? (
+          <div className="mb-3 grid grid-cols-1 gap-1 border border-vault-border text-[10px] uppercase tracking-[0.12em]">
+            <button
+              onClick={() => {
+                navigate('/dashboard')
+                onNavigate?.()
+              }}
+              title="Client View"
+              className={`px-2 py-1.5 transition-colors ${
+                !isCoachView ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white'
+              }`}
+            >
+              C
+            </button>
+            <button
+              onClick={() => {
+                navigate('/coach')
+                onNavigate?.()
+              }}
+              title="Coach View"
+              className={`px-2 py-1.5 transition-colors ${
+                isCoachView ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white'
+              }`}
+            >
+              K
+            </button>
+          </div>
+        ) : (
+          <div className="mb-4 grid grid-cols-2 border border-vault-border text-[10px] uppercase tracking-[0.12em]">
+            <button
+              onClick={() => {
+                navigate('/dashboard')
+                onNavigate?.()
+              }}
+              className={`px-2 py-2 transition-colors ${
+                !isCoachView ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white'
+              }`}
+            >
+              Client View
+            </button>
+            <button
+              onClick={() => {
+                navigate('/coach')
+                onNavigate?.()
+              }}
+              className={`px-2 py-2 transition-colors ${
+                isCoachView ? 'bg-white text-vault-btn-text' : 'text-vault-muted hover:text-white'
+              }`}
+            >
+              Coach View
+            </button>
+          </div>
+        )}
+        <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
           {isCoachView ? (
             <div
               aria-label="Dan Kan"
@@ -165,12 +211,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <span className="font-serif text-xs text-vault-muted">RC</span>
             </div>
           )}
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-medium text-white">
-              {isCoachView ? 'Dan Kan' : 'Rachel Cheung'}
-            </p>
-            <p className="text-[11px] text-vault-muted">Sheung Wan</p>
-          </div>
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium text-white">
+                {isCoachView ? 'Dan Kan' : 'Rachel Cheung'}
+              </p>
+              <p className="text-[11px] text-vault-muted">Sheung Wan</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -432,6 +480,8 @@ export default function AppShell() {
   const meta = PAGE_META[location.pathname] ?? { eyebrow: 'The Vault', title: 'App' }
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('vault-sidebar-collapsed') === '1')
+  const homeTo = location.pathname.startsWith('/coach') ? '/coach' : '/dashboard'
 
   // ⌘K / Ctrl+K opens the command palette
   useEffect(() => {
@@ -445,11 +495,21 @@ export default function AppShell() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  const toggleCollapsed = () =>
+    setCollapsed((v) => {
+      localStorage.setItem('vault-sidebar-collapsed', v ? '0' : '1')
+      return !v
+    })
+
   return (
     <div className="app-black min-h-[100dvh] bg-vault-bg text-white">
-      {/* Sidebar — desktop */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-vault-border bg-vault-surface lg:block">
-        <SidebarContent />
+      {/* Sidebar — desktop, collapsible */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r border-vault-border bg-vault-surface transition-[width] duration-200 lg:block ${
+          collapsed ? 'w-16' : 'w-60'
+        }`}
+      >
+        <SidebarContent collapsed={collapsed} />
       </aside>
 
       {/* Sidebar — mobile drawer */}
@@ -484,7 +544,7 @@ export default function AppShell() {
       </AnimatePresence>
 
       {/* Top bar */}
-      <div className="lg:pl-60">
+      <div className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-16' : 'lg:pl-60'}`}>
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-vault-border bg-vault-bg/90 px-4 backdrop-blur-md md:px-8">
           <div className="flex items-center gap-3">
             <button
@@ -494,6 +554,19 @@ export default function AppShell() {
             >
               <Menu className="h-5 w-5" />
             </button>
+            <button
+              className="hidden border border-vault-border p-1.5 text-vault-muted transition-colors hover:text-white lg:block"
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={toggleCollapsed}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" strokeWidth={1.5} />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" strokeWidth={1.5} />
+              )}
+            </button>
+            <NavButtons homeTo={homeTo} />
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-vault-muted">
                 {meta.eyebrow}

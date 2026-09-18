@@ -14,6 +14,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   BellPlus,
   CalendarClock,
+  Eye,
+  EyeOff,
   Phone,
   Receipt,
   UserPlus,
@@ -35,6 +37,8 @@ import {
 } from '@/lib/staff'
 import type { ShiftEventType, StaffProfile } from '@/lib/staff'
 import { QUICK_SALE_ITEMS as SALE_ITEMS, formatHKD } from '@/lib/pos'
+import KpiSheet from '@/components/KpiSheet'
+import { KPI_MASK } from '@/components/KpiSheet'
 
 /** Mock baselines for the current shift — live events add on top. */
 const BASE = {
@@ -254,6 +258,8 @@ export default function FrontDesk() {
   const profile = getCurrentProfile()
   const [tick, setTick] = useState(0)
   const [reminders, setReminders] = useState(() => listReminders())
+  const [hidden, setHidden] = useState(() => localStorage.getItem('vault-kpi-hidden') === '1')
+  const [sheetTitle, setSheetTitle] = useState<string | null>(null)
 
   // Deep link: /portal/front-desk#reminders scrolls to the reminder board.
   useEffect(() => {
@@ -291,13 +297,30 @@ export default function FrontDesk() {
   })
 
   const kpis = [
-    { label: 'Total check-ins', icon: Users, value: BASE.checkins + live.checkins, sub: 'members · PT · drop-ins' },
-    { label: 'Items sold', icon: Receipt, value: BASE.itemsSold + live.events.filter((e) => e.type === 'sale').length, sub: `POS · ${formatHKD(BASE.salesHKD + live.sales)}` },
-    { label: 'Stock adjustments', icon: Package, value: BASE.stock + live.stock, sub: '2 restock · 1 transfer + live' },
-    { label: 'Calls & messages', icon: Phone, value: BASE.messages + live.messages, sub: 'calls · WhatsApp replies' },
-    { label: 'Sign-ups / trials', icon: UserPlus, value: BASE.signups, sub: '2 memberships · 2 trials' },
-    { label: 'Productivity score', icon: Star, value: BASE.score, sub: '▲ 6 pts vs yesterday', gold: true, live: live.pts },
+    { key: 'checkin', label: 'Total check-ins', icon: Users, value: BASE.checkins + live.checkins, sub: 'members · PT · drop-ins' },
+    { key: 'sale', label: 'Items sold', icon: Receipt, value: BASE.itemsSold + live.events.filter((e) => e.type === 'sale').length, sub: `POS · ${formatHKD(BASE.salesHKD + live.sales)}` },
+    { key: 'stock', label: 'Stock adjustments', icon: Package, value: BASE.stock + live.stock, sub: '2 restock · 1 transfer + live' },
+    { key: 'message', label: 'Calls & messages', icon: Phone, value: BASE.messages + live.messages, sub: 'calls · WhatsApp replies' },
+    { key: 'signup', label: 'Sign-ups / trials', icon: UserPlus, value: BASE.signups, sub: '2 memberships · 2 trials' },
+    { key: 'score', label: 'Productivity score', icon: Star, value: BASE.score, sub: '▲ 6 pts vs yesterday', gold: true, live: live.pts },
   ]
+
+  // Full activity log behind every KPI card — live events first, then seed.
+  const activityRows = [
+    ...live.events.map((e) => ({
+      time: new Date(e.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      activity: e.label,
+      type: TYPE_META[e.type].pill,
+      points: e.points > 0 ? e.points : '—',
+    })),
+    ...SEED_FEED.map((r) => ({ time: r.time, activity: r.label, type: r.pill, points: '—' as const })),
+  ]
+
+  const toggleHidden = () =>
+    setHidden((v) => {
+      localStorage.setItem('vault-kpi-hidden', v ? '0' : '1')
+      return !v
+    })
 
   const doneReminder = (id: string, title: string) => {
     completeReminder(id)
@@ -327,27 +350,60 @@ export default function FrontDesk() {
       {/* Quick add */}
       <QuickAdd profile={profile} onLogged={refresh} />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((k, i) => (
-          <motion.div
-            key={k.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: i * 0.05, ease: 'easeOut' }}
-            className={`app-card p-4 ${k.gold ? 'border-gold/50' : ''}`}
+      {/* KPI row — click a card for the full activity sheet; eye toggle masks figures */}
+      <div>
+        <div className="mb-2 flex items-center justify-end gap-2">
+          <span className="text-[11px] text-vault-faint">{hidden ? 'Figures hidden' : 'Figures visible'}</span>
+          <button
+            type="button"
+            onClick={toggleHidden}
+            aria-pressed={hidden}
+            aria-label={hidden ? 'Show KPI figures' : 'Hide KPI figures'}
+            title={hidden ? 'Show KPI figures' : 'Hide KPI figures'}
+            className="flex h-8 w-8 items-center justify-center border border-vault-border text-vault-muted transition-colors hover:border-white/40 hover:text-white"
           >
-            <p className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] ${k.gold ? 'text-gold' : 'text-vault-muted'}`}>
-              <k.icon className="h-3.5 w-3.5" strokeWidth={1.5} /> {k.label}
-            </p>
-            <p className={`tnum mt-2 text-[24px] font-bold leading-none ${k.gold ? 'text-gold' : 'text-white'}`}>
-              {k.value.toLocaleString()}
-              {k.live ? <span className="ml-1 text-[12px] text-gold">+{k.live}</span> : null}
-            </p>
-            <p className="mt-2 text-[11px] text-vault-muted">{k.sub}</p>
-          </motion.div>
-        ))}
+            {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+          {kpis.map((k, i) => (
+            <motion.button
+              key={k.label}
+              type="button"
+              onClick={() => setSheetTitle(k.label)}
+              title={`Open ${k.label} detail`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.05, ease: 'easeOut' }}
+              className={`app-card p-4 text-left transition-colors hover:border-white/40 ${k.gold ? 'border-gold/50' : ''}`}
+            >
+              <p className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] ${k.gold ? 'text-gold' : 'text-vault-muted'}`}>
+                <k.icon className="h-3.5 w-3.5" strokeWidth={1.5} /> {k.label}
+              </p>
+              <p className={`tnum mt-2 text-[24px] font-bold leading-none ${k.gold ? 'text-gold' : 'text-white'}`}>
+                {hidden ? KPI_MASK : k.value.toLocaleString()}
+                {!hidden && k.live ? <span className="ml-1 text-[12px] text-gold">+{k.live}</span> : null}
+              </p>
+              <p className="mt-2 text-[11px] text-vault-muted">{hidden ? KPI_MASK : k.sub}</p>
+            </motion.button>
+          ))}
+        </div>
       </div>
+      {sheetTitle && (
+        <KpiSheet
+          title={sheetTitle}
+          subtitle="Full shift activity log — filter by category or sort any column"
+          columns={[
+            { key: 'time', label: 'Time' },
+            { key: 'activity', label: 'Activity' },
+            { key: 'type', label: 'Type' },
+            { key: 'points', label: 'Points', align: 'num' },
+          ]}
+          rows={activityRows}
+          filterKey="type"
+          onClose={() => setSheetTitle(null)}
+        />
+      )}
 
       {/* Canvas + rail */}
       <div className="grid gap-6 xl:grid-cols-[1fr_300px]">

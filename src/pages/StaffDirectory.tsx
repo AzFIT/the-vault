@@ -51,7 +51,13 @@ export default function StaffDirectory() {
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ name: '', category: 'vault' as StaffCategory, role: '', tags: '', contact: '' })
+  const [form, setForm] = useState({
+    name: '',
+    categories: ['vault'] as StaffCategory[],
+    role: '',
+    tags: '',
+    contact: '',
+  })
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = {
@@ -61,7 +67,7 @@ export default function StaffDirectory() {
       instructor: 0,
       'front-desk': 0,
     }
-    for (const r of rows) c[r.category] += 1
+    for (const r of rows) for (const cat of r.categories) c[cat] += 1
     return c
   }, [rows])
 
@@ -74,7 +80,7 @@ export default function StaffDirectory() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return rows.filter((r) => {
-      if (tab !== 'all' && r.category !== tab) return false
+      if (tab !== 'all' && !r.categories.includes(tab)) return false
       if (tagFilter && !r.tags.includes(tagFilter)) return false
       if (q) {
         const hay = `${r.name} ${r.role} ${r.staffNo} ${r.tags.join(' ')}`.toLowerCase()
@@ -86,25 +92,37 @@ export default function StaffDirectory() {
 
   const submitAdd = (e: FormEvent) => {
     e.preventDefault()
-    if (!form.name.trim() || !form.role.trim()) return
+    if (!form.name.trim() || !form.role.trim() || form.categories.length === 0) return
+    const primary = form.categories[0]
     setRows(
       addStaff({
         name: form.name.trim(),
-        category: form.category,
+        category: primary,
+        categories: form.categories,
         role: form.role.trim(),
         tags: form.tags
           .split(',')
           .map((t) => t.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '-'))
           .filter(Boolean),
         status: 'off',
-        clients: form.category === 'vault' ? 0 : null,
+        clients: form.categories.includes('vault') ? 0 : null,
         contact: form.contact.trim() || '—',
         since: String(new Date().getFullYear()),
       }),
     )
-    setForm({ name: '', category: 'vault', role: '', tags: '', contact: '' })
+    setForm({ name: '', categories: ['vault'], role: '', tags: '', contact: '' })
     setAdding(false)
   }
+
+  const toggleFormCategory = (c: StaffCategory) =>
+    setForm((f) => ({
+      ...f,
+      categories: f.categories.includes(c)
+        ? f.categories.filter((x) => x !== c)
+        : f.categories.length >= 3
+          ? f.categories
+          : [...f.categories, c],
+    }))
 
   return (
     <div className="space-y-5">
@@ -172,20 +190,28 @@ export default function StaffDirectory() {
                 className="w-full border border-vault-border bg-vault-surface px-3 py-2 text-[13px] text-white focus:border-gold focus:outline-none"
               />
             </label>
-            <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">Category</span>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value as StaffCategory })}
-                className="w-full border border-vault-border bg-vault-surface px-3 py-2 text-[13px] text-white focus:border-gold focus:outline-none"
-              >
+            <div className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">
+                Categories (up to 3 · first = primary)
+              </span>
+              <div className="flex flex-wrap gap-1.5 pt-1">
                 {CATEGORY_ORDER.map((c) => (
-                  <option key={c} value={c}>
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => toggleFormCategory(c)}
+                    aria-pressed={form.categories.includes(c)}
+                    className={`border px-2 py-1 text-[11px] transition-colors ${
+                      form.categories.includes(c)
+                        ? 'border-gold bg-gold/10 text-gold'
+                        : 'border-vault-border text-vault-muted hover:border-white/30 hover:text-white'
+                    }`}
+                  >
                     {CATEGORY_LABELS[c]}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
             <label className="block">
               <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">Role</span>
               <input
@@ -302,9 +328,18 @@ export default function StaffDirectory() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block border px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] ${categoryPillCls(r.category)}`}>
-                      {CATEGORY_LABELS[r.category]}
-                    </span>
+                    <div className="flex max-w-[260px] flex-wrap gap-1">
+                      {r.categories.slice(0, 3).map((c) => (
+                        <span key={c} className={`inline-block border px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] ${categoryPillCls(c)}`}>
+                          {CATEGORY_LABELS[c]}
+                        </span>
+                      ))}
+                      {r.categories.length > 3 && (
+                        <span className="inline-block border border-vault-border px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-vault-faint">
+                          +{r.categories.length - 3}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-vault-muted">{r.role}</td>
                   <td className="px-4 py-3">

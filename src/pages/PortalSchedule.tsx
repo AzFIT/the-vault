@@ -1,13 +1,15 @@
 /**
- * Schedule (/portal/schedule) — the owner portal's week grid (wireframe
- * screen 04, Pike13 layout). Colour-coded blocks: gold = revenue-bearing
- * PT 1:1/2:1, white = group class with capacity, dashed = bookable open
- * room slot. Week/day toggle, ‹ › week navigation, legend filters, and a
- * click-to-edit drawer (time, room, coach, capacity, note). Edits persist
- * to localStorage; drag-to-move is a later phase.
+ * Schedule — the studio week grid (wireframe screen 04, Pike13 layout),
+ * mounted at /portal/schedule (owner) and /portal/desk-schedule (front
+ * desk); each shell guards its own role. Colour-coded blocks: gold =
+ * revenue-bearing PT 1:1/2:1, white = group class with capacity, dashed =
+ * bookable open room slot. Week/day toggle, ‹ › week navigation, legend
+ * filters, click any empty time slot to create a block at that day + time,
+ * and a click-to-edit drawer (type-first: class blocks pick from class
+ * templates). Edits persist to localStorage; drag-to-move is a later phase.
  */
 import { useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-react'
 import {
   BLOCK_TYPE_LABELS,
@@ -69,6 +71,21 @@ const EMPTY_DRAFT: Omit<ScheduleBlock, 'id'> = {
   note: '',
 }
 
+/** Class templates offered when scheduling a class block. */
+const CLASS_TEMPLATES: { title: string; capacity: number; room: string }[] = [
+  { title: 'Strength Class', capacity: 6, room: 'Main' },
+  { title: 'FITMAMA Strength', capacity: 6, room: 'Main' },
+  { title: 'Hyrox Class', capacity: 6, room: 'Main' },
+  { title: 'Reformer Pilates', capacity: 8, room: 'Reformer' },
+  { title: 'Spin & HIIT', capacity: 10, room: 'Main' },
+]
+
+/** Snap a raw minute offset to the nearest half hour inside the grid. */
+function snapToSlot(minutes: number): number {
+  const snapped = Math.round(minutes / 30) * 30
+  return Math.min(Math.max(snapped, GRID_START_MIN), GRID_END_MIN - 30)
+}
+
 export default function PortalSchedule() {
   const [blocks, setBlocks] = useState<ScheduleBlock[]>(() => listBlocks())
   const [weekOffset, setWeekOffset] = useState(0)
@@ -105,9 +122,17 @@ export default function PortalSchedule() {
     setDraft({ ...rest, id })
   }
 
-  const openNew = () => {
-    const target = view === 'day' ? dayDate : weekOffset === 0 ? new Date() : monday
-    setDraft({ ...EMPTY_DRAFT, date: iso(target) })
+  const openNew = (dateIso?: string, startMin?: number) => {
+    const target =
+      dateIso ?? (view === 'day' ? iso(dayDate) : weekOffset === 0 ? iso(new Date()) : iso(monday))
+    setDraft({ ...EMPTY_DRAFT, date: target, startMin: startMin ?? EMPTY_DRAFT.startMin })
+  }
+
+  /** Click an empty part of the grid → new block prefilled to that day + time slot. */
+  const handleGridClick = (date: Date, e: ReactMouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const rawMin = GRID_START_MIN + (e.clientY - rect.top) / PX_PER_MIN
+    openNew(iso(date), snapToSlot(rawMin))
   }
 
   const closeDrawer = () => setDraft(null)
@@ -155,7 +180,7 @@ export default function PortalSchedule() {
         </div>
         <button
           type="button"
-          onClick={openNew}
+          onClick={() => openNew()}
           className="inline-flex items-center gap-2 bg-gold px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-black transition-colors hover:bg-gold-2"
         >
           <Plus className="h-3.5 w-3.5" /> Add block
@@ -265,7 +290,12 @@ export default function PortalSchedule() {
                 >
                   {fmtDayHeader(date)}
                 </div>
-                <div className="relative" style={{ height: GRID_HEIGHT }}>
+                <div
+                  className="relative cursor-crosshair"
+                  style={{ height: GRID_HEIGHT }}
+                  onClick={(e) => handleGridClick(date, e)}
+                  title="Click a time slot to create a block"
+                >
                   {HOURS.map((m) => (
                     <div
                       key={m}
@@ -277,8 +307,11 @@ export default function PortalSchedule() {
                     <button
                       key={b.id}
                       type="button"
-                      onClick={() => openDrawer(b)}
-                      className={`absolute left-1 right-1 overflow-hidden border px-2 py-1 text-left transition-colors hover:brightness-125 ${blockCls(b.type)}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openDrawer(b)
+                      }}
+                      className={`absolute left-1 right-1 cursor-pointer overflow-hidden border px-2 py-1 text-left transition-colors hover:brightness-125 ${blockCls(b.type)}`}
                       style={{
                         top: Math.max(0, (b.startMin - GRID_START_MIN) * PX_PER_MIN),
                         height: Math.max(28, b.durationMin * PX_PER_MIN - 3),
@@ -307,8 +340,9 @@ export default function PortalSchedule() {
           1:1/2:1 sessions, white blocks are group classes, dashed blocks are bookable open slots.
         </p>
         <p>
-          <span className="text-vault-muted">Block click</span> opens the edit drawer — time, room,
-          coach, capacity. Drag-to-move comes in a later phase.
+          <span className="text-vault-muted">Grid click</span> — click any empty time slot to create a
+          block right there; the drawer picks up that day and start time. Clicking a block opens it
+          for editing. Drag-to-move comes in a later phase.
         </p>
       </div>
 
@@ -326,15 +360,6 @@ export default function PortalSchedule() {
               </button>
             </div>
             <form onSubmit={saveDrawer} className="mt-4 space-y-3">
-              <label className="block">
-                <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">Title</span>
-                <input
-                  required
-                  value={draft.title}
-                  onChange={(e) => setDraftField('title', e.target.value)}
-                  className="w-full border border-vault-border bg-vault-bg px-3 py-2 text-[13px] text-white focus:border-gold focus:outline-none"
-                />
-              </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">Type</span>
@@ -360,6 +385,43 @@ export default function PortalSchedule() {
                     className="w-full border border-vault-border bg-vault-bg px-3 py-2 text-[13px] text-white focus:border-gold focus:outline-none"
                   />
                 </label>
+              </div>
+              {draft.type === 'class' && (
+                <label className="block">
+                  <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">Class</span>
+                  <select
+                    value={CLASS_TEMPLATES.some((t) => t.title === draft.title) ? draft.title : ''}
+                    onChange={(e) => {
+                      const tpl = CLASS_TEMPLATES.find((t) => t.title === e.target.value)
+                      if (!tpl) return
+                      setDraft((d) =>
+                        d ? { ...d, title: tpl.title, capacity: tpl.capacity, room: tpl.room } : d,
+                      )
+                    }}
+                    className="w-full border border-vault-border bg-vault-bg px-3 py-2 text-[13px] text-white focus:border-gold focus:outline-none"
+                  >
+                    <option value="">Pick a class…</option>
+                    {CLASS_TEMPLATES.map((t) => (
+                      <option key={t.title} value={t.title}>
+                        {t.title} · cap {t.capacity}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">
+                  {draft.type === 'pt' ? 'Client / title' : 'Title'}
+                </span>
+                <input
+                  required
+                  value={draft.title}
+                  onChange={(e) => setDraftField('title', e.target.value)}
+                  placeholder={draft.type === 'pt' ? 'e.g. Rachel Cheung — PT 1:1' : draft.type === 'open' ? 'e.g. Open floor' : ''}
+                  className="w-full border border-vault-border bg-vault-bg px-3 py-2 text-[13px] text-white placeholder:text-vault-faint focus:border-gold focus:outline-none"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="mb-1 block text-[10px] uppercase tracking-[0.14em] text-vault-faint">Start</span>
                   <input
