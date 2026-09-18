@@ -15,6 +15,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { LogOut, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { ENQUIRIES_CHANGED_EVENT, countNewEnquiries } from '@/lib/enquiries'
 import { getCurrentProfile, openReminderCount, signOut } from '@/lib/staff'
+import { asset } from '@/lib/utils'
 import NavButtons from '@/components/NavButtons'
 
 interface DeskNavItem {  label: string
@@ -125,7 +126,7 @@ function SidebarContent({
   return (
     <>
       <div className={`flex items-center gap-3 border-b border-vault-border px-2 pb-4 pt-1 ${collapsed ? 'justify-center' : ''}`}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-gold text-[13px] font-bold text-gold">V</span>
+        <img src={asset('brand/vault-logo-mark.png')} alt="The Vault" className="h-8 w-auto shrink-0 object-contain" />
         {!collapsed && <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>}
       </div>
       {!collapsed && <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Today</p>}
@@ -284,6 +285,13 @@ export default function FrontDeskShell() {
         {/* Main */}
         <div className={`min-w-0 flex-1 transition-[padding] duration-200 ${collapsed ? 'lg:pl-16' : 'lg:pl-60'}`}>
           <header className="sticky top-0 z-30 flex h-16 flex-wrap items-center gap-3 border-b border-vault-border bg-vault-bg/90 px-4 backdrop-blur-md md:px-8">
+            <Link
+              to="/"
+              aria-label="The Vault Fitness — home"
+              className="absolute left-1/2 hidden -translate-x-1/2 md:block"
+            >
+              <img src={asset('brand/vault-logo-mark.png')} alt="" className="h-8 w-auto object-contain" />
+            </Link>
             <button
               type="button"
               onClick={() => setMobileOpen(true)}

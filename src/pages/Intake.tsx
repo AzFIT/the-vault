@@ -1275,7 +1275,7 @@ export default function Intake() {
         {/* Brand */}
         <header className="mb-10 text-center">
           <img
-            src="brand/vault-logo.png"
+            src="brand/vault-logo-full.png"
             alt="The Vault Fitness"
             className="mx-auto h-24 w-auto md:h-28"
             width={640}

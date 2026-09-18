@@ -33,7 +33,7 @@ export default function PortalLogin() {
       <div className="flex flex-col justify-between border-b border-vault-border p-8 md:p-12 lg:border-b-0 lg:border-r">
         <div>
           <Link to="/" aria-label="The Vault Fitness — home" className="inline-flex items-center gap-3">
-            <img src={asset('logo-gold.png')} alt="The Vault Fitness" className="h-12 w-auto" />
+            <img src={asset('brand/vault-logo-full.png')} alt="The Vault Fitness" className="h-12 w-auto" />
           </Link>
           <h1 className="mt-10 font-serif text-3xl font-bold md:text-4xl">Management Portal</h1>
           <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-vault-muted">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { asset } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -81,7 +81,7 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className={`flex h-16 items-center gap-3 border-b border-vault-border px-5 ${collapsed ? 'justify-center px-0' : ''}`}>
-        <img src={asset('logo-gold.png')} alt="The Vault" className="h-9 w-9 object-contain" />
+        <img src={asset('brand/vault-logo-mark.png')} alt="The Vault" className="h-9 w-auto object-contain" />
         {!collapsed && <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>}
       </div>
 
@@ -546,6 +546,13 @@ export default function AppShell() {
       {/* Top bar */}
       <div className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-16' : 'lg:pl-60'}`}>
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-vault-border bg-vault-bg/90 px-4 backdrop-blur-md md:px-8">
+          <Link
+            to="/"
+            aria-label="The Vault Fitness — home"
+            className="absolute left-1/2 hidden -translate-x-1/2 md:block"
+          >
+            <img src={asset('brand/vault-logo-mark.png')} alt="" className="h-8 w-auto object-contain" />
+          </Link>
           <div className="flex items-center gap-3">
             <button
               className="text-vault-muted hover:text-white lg:hidden"

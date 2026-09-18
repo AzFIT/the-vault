@@ -59,7 +59,7 @@ export default function Navbar() {
       {/* 2 — Header bar with centered logo */}
       <div className="relative flex h-[96px] items-center justify-center border-b border-vault-border px-4 md:h-[112px] md:px-5">
         <Link to="/" aria-label="The Vault Fitness — home">
-          <img src={asset('logo-gold.png')} alt="The Vault Fitness" className="h-16 w-auto md:h-20" />
+          <img src={asset('brand/vault-logo-full.png')} alt="The Vault Fitness" className="h-16 w-auto md:h-20" />
         </Link>
 
         <div className="absolute right-4 flex items-center gap-5 md:right-5">
@@ -105,7 +105,7 @@ export default function Navbar() {
             className="fixed inset-0 z-[70] flex flex-col bg-vault-bg md:hidden"
           >
             <div className="flex h-[72px] items-center justify-between border-b border-vault-border px-4">
-              <img src={asset('logo-gold.png')} alt="The Vault Fitness" className="h-12 w-auto" />
+              <img src={asset('brand/vault-logo-full.png')} alt="The Vault Fitness" className="h-12 w-auto" />
               <motion.button
                 aria-label="Close menu"
                 onClick={() => setOpen(false)}

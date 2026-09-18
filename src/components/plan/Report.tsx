@@ -565,7 +565,7 @@ export default function Report({
     <article className="vault-report mx-auto w-full max-w-[800px] border border-vault-border bg-vault-surface p-6 sm:p-10 md:p-14">
       {/* header */}
       <motion.header {...fadeUp(0)} className="mb-10 text-center">
-        <img src={asset('logo-gold.png')} alt="The Vault Fitness" className="report-logo mx-auto h-20 w-20 object-contain" />
+        <img src={asset('brand/vault-logo-mark.png')} alt="The Vault Fitness" className="report-logo mx-auto h-20 w-auto object-contain" />
         <p className="eyebrow mt-4 report-muted">The Vault Fitness · Sheung Wan</p>
         <h2 className="mt-2 text-[30px] font-bold leading-tight text-white report-ink md:text-[40px]">
           Personal Training Blueprint
