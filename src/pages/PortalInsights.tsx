@@ -9,9 +9,10 @@
  *
  * All figures derive from the shared mock store (monthlyRevenue, coaches,
  * coachClients). Staff splits are deterministic weights, not random — same
- * numbers every render. An eye toggle masks figures for privacy (persisted).
+ * numbers every render. The hide/show-figures toggle is shared with the
+ * owner dashboard and front desk (see lib/kpiHidden), and a Print / PDF
+ * button opens the standalone report at /portal/insights/report.
  */
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Bar,
@@ -23,18 +24,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { CalendarClock, Eye, EyeOff } from 'lucide-react'
-import { coachClients, coaches, formatHKD, monthlyRevenue } from '@/data/mock'
+import { CalendarClock, Eye, EyeOff, Printer } from 'lucide-react'
+import { formatHKD, monthlyRevenue } from '@/data/mock'
 import { GridAvatar, SectionHeader } from '@/components/coach/shared'
 import { KPI_MASK } from '@/components/KpiSheet'
-
-const STREAMS = [
-  { key: 'pt', label: 'PT Packages', color: 'var(--viz-1)' },
-  { key: 'memberships', label: 'Memberships', color: 'var(--viz-2)' },
-  { key: 'classes', label: 'Classes', color: 'var(--viz-3)' },
-] as const
-
-const HIDDEN_KEY = 'vault-kpi-hidden'
+import { useKpiHidden } from '@/lib/kpiHidden'
+import { STREAMS, staffPerformanceRows } from '@/lib/insights'
 
 const todayLabel = new Date().toLocaleDateString('en-GB', {
   weekday: 'long',
@@ -189,26 +184,9 @@ function RevenuePanels({ hidden }: { hidden: boolean }) {
 // Staff performance — deterministic attribution (Head Coach > Junior)
 // ---------------------------------------------------------------------------
 
-const STAFF_WEIGHTS = [0.3, 0.22, 0.2, 0.16, 0.12]
-const STAFF_UTIL = [92, 84, 81, 76, 62]
-const STAFF_ADHERENCE = [89, 91, 86, 84, 78]
-
 function StaffPanel({ hidden }: { hidden: boolean }) {
   const last = monthlyRevenue[monthlyRevenue.length - 1]
-  const totalClients = coachClients.length
-  const rows = coaches.map((c, i) => {
-    const sessions = Math.round(last.sessionsDelivered * STAFF_WEIGHTS[i])
-    const revenue = Math.round((last.pt * STAFF_WEIGHTS[i]) / 100) * 100
-    const clients = Math.max(1, Math.round((totalClients * STAFF_WEIGHTS[i]) / 0.62) - (i > 2 ? 1 : 0))
-    return {
-      coach: c,
-      sessions,
-      revenue,
-      utilisation: STAFF_UTIL[i],
-      adherence: STAFF_ADHERENCE[i],
-      clients,
-    }
-  })
+  const rows = staffPerformanceRows()
 
   const maxRevenue = Math.max(...rows.map((r) => r.revenue))
 
@@ -304,13 +282,7 @@ function StaffPanel({ hidden }: { hidden: boolean }) {
 // ---------------------------------------------------------------------------
 
 export default function PortalInsights() {
-  const [hidden, setHidden] = useState(() => localStorage.getItem(HIDDEN_KEY) === '1')
-
-  const toggleHidden = () =>
-    setHidden((v) => {
-      localStorage.setItem(HIDDEN_KEY, v ? '0' : '1')
-      return !v
-    })
+  const [hidden, toggleHidden] = useKpiHidden()
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -323,15 +295,30 @@ export default function PortalInsights() {
             <CalendarClock className="h-3.5 w-3.5" /> {todayLabel}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={toggleHidden}
-          aria-pressed={hidden}
-          className="inline-flex items-center gap-2 border border-vault-border px-3 py-2 text-[11px] uppercase tracking-[0.1em] text-vault-muted transition-colors hover:border-white/40 hover:text-white"
-        >
-          {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          {hidden ? 'Show figures' : 'Hide figures'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              // Dev base is './' — resolve against the origin root instead of
+              // the current route so the URL works from any page.
+              const base = import.meta.env.BASE_URL
+              const root = base === './' ? '/' : base
+              window.open(`${root}portal/insights/report`, '_blank', 'noopener')
+            }}
+            className="inline-flex items-center gap-2 border border-vault-border px-3 py-2 text-[11px] uppercase tracking-[0.1em] text-vault-muted transition-colors hover:border-white/40 hover:text-white"
+          >
+            <Printer className="h-3.5 w-3.5" /> Print / PDF report
+          </button>
+          <button
+            type="button"
+            onClick={toggleHidden}
+            aria-pressed={hidden}
+            className="inline-flex items-center gap-2 border border-vault-border px-3 py-2 text-[11px] uppercase tracking-[0.1em] text-vault-muted transition-colors hover:border-white/40 hover:text-white"
+          >
+            {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {hidden ? 'Show figures' : 'Hide figures'}
+          </button>
+        </div>
       </div>
 
       {/* Revenue */}

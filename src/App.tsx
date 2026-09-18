@@ -17,6 +17,7 @@ const StaffDirectory = lazy(() => import('./pages/StaffDirectory'))
 const PortalClients = lazy(() => import('./pages/PortalClients'))
 const PortalSchedule = lazy(() => import('./pages/PortalSchedule'))
 const PortalInsights = lazy(() => import('./pages/PortalInsights'))
+const PortalInsightsReport = lazy(() => import('./pages/PortalInsightsReport'))
 const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -72,6 +73,10 @@ export default function App() {
 
       {/* Public client intake — no chrome, no login, shareable link */}
       <Route path="/intake" element={page(<Intake />)} />
+
+      {/* Printable monthly revenue report — no chrome so prints stay clean;
+          unguarded while auth is tester-mode (same trade-off as /intake) */}
+      <Route path="/portal/insights/report" element={page(<PortalInsightsReport />)} />
 
       {/* Management portal — Phase A tester sign-in (no real auth yet) */}
       <Route path="/portal/login" element={page(<PortalLogin />)} />

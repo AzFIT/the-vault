@@ -23,6 +23,7 @@ import {
 import { CountUp, SectionHeader } from '@/components/coach/shared'
 import { NOW_LABEL_MINUTES, TODAY_SCHEDULE, timeToMinutes } from '@/components/coach/scheduleData'
 import { countNewEnquiries, listEnquiries } from '@/lib/enquiries'
+import { useKpiHidden } from '@/lib/kpiHidden'
 import KpiSheet from '@/components/KpiSheet'
 import type { KpiColumn } from '@/components/KpiSheet'
 import { KPI_MASK } from '@/components/KpiSheet'
@@ -73,10 +74,8 @@ const YESTERDAY = [
 
 // ---------------------------------------------------------------------------
 // KPI row — every card opens a full "sheets view" of its underlying stats;
-// an eye toggle masks all figures for privacy (persisted).
+// an eye toggle masks all figures for privacy (shared, persisted).
 // ---------------------------------------------------------------------------
-
-const KPI_HIDDEN_KEY = 'vault-kpi-hidden'
 
 interface SheetDef {
   title: string
@@ -101,14 +100,8 @@ function KpiRow() {
       100,
   )
   const newEnquiries = countNewEnquiries()
-  const [hidden, setHidden] = useState(() => localStorage.getItem(KPI_HIDDEN_KEY) === '1')
+  const [hidden, toggleHidden] = useKpiHidden()
   const [sheet, setSheet] = useState<SheetDef | null>(null)
-
-  const toggleHidden = () =>
-    setHidden((v) => {
-      localStorage.setItem(KPI_HIDDEN_KEY, v ? '0' : '1')
-      return !v
-    })
 
   const sheets: Record<string, SheetDef> = {
     revenue: {

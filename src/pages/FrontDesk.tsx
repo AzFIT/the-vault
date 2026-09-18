@@ -37,6 +37,7 @@ import {
 } from '@/lib/staff'
 import type { ShiftEventType, StaffProfile } from '@/lib/staff'
 import { QUICK_SALE_ITEMS as SALE_ITEMS, formatHKD } from '@/lib/pos'
+import { useKpiHidden } from '@/lib/kpiHidden'
 import KpiSheet from '@/components/KpiSheet'
 import { KPI_MASK } from '@/components/KpiSheet'
 
@@ -258,7 +259,7 @@ export default function FrontDesk() {
   const profile = getCurrentProfile()
   const [tick, setTick] = useState(0)
   const [reminders, setReminders] = useState(() => listReminders())
-  const [hidden, setHidden] = useState(() => localStorage.getItem('vault-kpi-hidden') === '1')
+  const [hidden, toggleHidden] = useKpiHidden()
   const [sheetTitle, setSheetTitle] = useState<string | null>(null)
 
   // Deep link: /portal/front-desk#reminders scrolls to the reminder board.
@@ -315,12 +316,6 @@ export default function FrontDesk() {
     })),
     ...SEED_FEED.map((r) => ({ time: r.time, activity: r.label, type: r.pill, points: '—' as const })),
   ]
-
-  const toggleHidden = () =>
-    setHidden((v) => {
-      localStorage.setItem('vault-kpi-hidden', v ? '0' : '1')
-      return !v
-    })
 
   const doneReminder = (id: string, title: string) => {
     completeReminder(id)
