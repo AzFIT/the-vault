@@ -1,0 +1,201 @@
+/* ===========================================================================
+ * THE VAULT FITNESS — MARKETING THEME (Phase 2: homepage re-theme)
+ * Source: the-vault-design-pack/prompts/the-vault-kimi-work-prompts-all-phases.txt
+ *
+ * All classes are scoped under `.tv2` (see tokens.css header) and reference
+ * Phase 1 tokens only — no hardcoded hex outside the chip accents mandated by
+ * the Phase 2 spec (Hyrox teal / FITMAMA maroon), defined once below.
+ * Reverting Phase 2 removes this file wholesale.
+ * =========================================================================== */
+
+.tv2 {
+  /* Spec-mandated class-strip chip accents (small color-coded tags). */
+  --chip-teal: #2e8b8b;
+  --chip-teal-soft: rgba(46, 139, 139, 0.18);
+  --chip-maroon: #8a4a4a;
+  --chip-maroon-soft: rgba(138, 74, 74, 0.18);
+}
+
+/* ---- Gradient text (headline emphasis, stat numerals) ---- */
+.tv2 .gold-text {
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---- Caps gold section header ---- */
+.tv2 .section-head {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* ---- Scroll fade-up (replaces the old per-section GSAP choreography) ---- */
+@keyframes tv2-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.tv2 .rise {
+  opacity: 0;
+}
+.tv2 .rise.is-in {
+  animation: tv2-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tv2 .rise,
+  .tv2 .rise.is-in {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/* ---- Navbar ---- */
+.tv2 .nav-link {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+  position: relative;
+}
+.tv2 .nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+.tv2 .nav-link:hover {
+  color: var(--gold);
+}
+.tv2 .nav-link:hover::after {
+  transform: scaleX(1);
+}
+
+/* ---- Hero (split) ---- */
+.tv2 .hero-photo-fade {
+  /* Warm gold-rim photo fading into the black headline panel. */
+  background: linear-gradient(90deg, var(--bg-deep) 0%, rgba(13, 13, 15, 0.55) 18%, rgba(13, 13, 15, 0) 45%);
+}
+
+/* ---- Class strip chips ---- */
+.tv2 .chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.35em 0.9em;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.tv2 .chip-teal {
+  color: #7fc7c7;
+  background: var(--chip-teal-soft);
+  border-color: var(--chip-teal);
+}
+.tv2 .chip-maroon {
+  color: #c79494;
+  background: var(--chip-maroon-soft);
+  border-color: var(--chip-maroon);
+}
+.tv2 .chip-gold {
+  color: var(--gold);
+  background: rgba(212, 175, 55, 0.12);
+  border-color: rgba(212, 175, 55, 0.55);
+}
+
+/* ---- Hide scrollbars on snap strips while keeping scrollability ---- */
+.tv2 .strip-no-bar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tv2 .strip-no-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Equipment chips (facilities) — re-themed from index.css version ---- */
+.tv2 .equip-chip {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  color: var(--text-secondary);
+  padding: 0.55em 1.1em;
+  cursor: default;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.tv2 .equip-chip:hover {
+  background: rgba(212, 175, 55, 0.1);
+  color: var(--gold);
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
+/* ---- Pricing (spec: gold-outlined cards; GOLD tier brighter + glow) ---- */
+.tv2 .pricing-card {
+  background: var(--bg-card);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.tv2 .pricing-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(212, 175, 55, 0.35);
+}
+.tv2 .pricing-card--featured {
+  border: 1px solid rgba(232, 199, 102, 0.65);
+  box-shadow: var(--shadow-card), var(--shadow-gold-glow);
+}
+.tv2 .pricing-card--featured:hover {
+  border-color: var(--gold-light);
+}
+
+/* ---- Progress chart range chips (1M / 3M / 6M / 1Y) ---- */
+.tv2 .range-chip {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.5em 1.2em;
+  border-radius: var(--radius-pill);
+  border: var(--border-gold);
+  color: var(--gold);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.tv2 .range-chip:hover {
+  background: rgba(212, 175, 55, 0.08);
+}
+.tv2 .range-chip[data-active='true'] {
+  background: var(--gold);
+  color: #000;
+}
+
+/* ---- Footer link hover ---- */
+.tv2 .footer-link {
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+}
+.tv2 .footer-link:hover {
+  color: var(--gold);
+}

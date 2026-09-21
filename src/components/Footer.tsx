@@ -25,7 +25,8 @@ const HELP_LINKS = [
   { label: 'T&Cs', href: 'https://thevault-fitness.com/policies/terms-of-service' },
 ]
 
-/** Marketing footer — design.md §5.4 */
+/** Marketing footer — Phase 2 spec: charcoal, actual logo lockup, grey link
+ * columns, hairline gold divider, copyright --text-muted. */
 export default function Footer() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -43,14 +44,17 @@ export default function Footer() {
   }
 
   return (
-    <footer className="border-t border-vault-border bg-vault-bg">
+    <footer className="tv2" style={{ background: 'var(--bg-charcoal)', borderTop: '1px solid rgba(212,175,55,0.15)' }}>
       <div className="mx-auto grid max-w-[1600px] gap-12 px-5 py-16 md:grid-cols-2 lg:grid-cols-4 lg:gap-8 lg:px-8 lg:py-20">
         {/* 1 — Location block */}
         <div>
-          <img src={asset('brand/vault-logo-full.png')} alt="The Vault Fitness" className="mb-6 h-12 w-auto" />
-          <ul className="space-y-3 text-[13px] leading-relaxed text-vault-muted">
+          <span className="brand-logo brand-logo--sidebar mb-6">
+            <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="The Vault Fitness" />
+            <span className="brand-logo__wordmark">The Vault Fitness</span>
+          </span>
+          <ul className="space-y-3 text-[13px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
             <li className="flex gap-2.5">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" color="#D4AF37" />
               <span>
                 3/F Alliance Building, 133 Connaught Road,
                 <br />
@@ -63,10 +67,10 @@ export default function Footer() {
               Sat, Sun &amp; Public Holidays · 8am–8pm
             </li>
             <li className="flex gap-2.5">
-              <Phone className="mt-0.5 h-4 w-4 shrink-0" />
+              <Phone className="mt-0.5 h-4 w-4 shrink-0" color="#D4AF37" />
               <span>
                 WhatsApp / Phone ·{' '}
-                <a href="tel:+85228859300" className="transition-colors hover:text-white">
+                <a href="tel:+85228859300" className="transition-colors hover:text-[#D4AF37]">
                   +852 2885 9300
                 </a>
               </span>
@@ -76,7 +80,8 @@ export default function Footer() {
             href="https://maps.google.com/?q=Alliance+Building,+133+Connaught+Road,+Sheung+Wan,+Hong+Kong"
             target="_blank"
             rel="noopener noreferrer"
-            className="group mt-5 inline-flex items-center gap-1 text-[13px] uppercase tracking-[0.08em] text-white"
+            className="group mt-5 inline-flex items-center gap-1.5 text-[13px] uppercase tracking-[0.08em]"
+            style={{ color: 'var(--gold)' }}
           >
             Directions
             <span className="transition-transform duration-200 group-hover:translate-x-1.5">→</span>
@@ -85,8 +90,8 @@ export default function Footer() {
 
         {/* 2 — Brand paragraph */}
         <div>
-          <p className="eyebrow mb-5">About</p>
-          <p className="max-w-xs text-[13px] leading-[1.8] text-vault-muted">
+          <p className="section-head mb-5">About</p>
+          <p className="max-w-xs text-[13px] leading-[1.8]" style={{ color: 'var(--text-secondary)' }}>
             The Vault Fitness, nestled in the heart of Sheung Wan, is a premier Hong
             Kong training facility offering state-of-the-art equipment, a VIP
             personal training studio and spacious changing facilities — every detail
@@ -98,14 +103,11 @@ export default function Footer() {
         {/* 3 — Link columns */}
         <div className="grid grid-cols-2 gap-8">
           <div>
-            <p className="eyebrow mb-5">The Gym</p>
+            <p className="section-head mb-5">The Gym</p>
             <ul className="space-y-2.5">
               {GYM_LINKS.map((l) => (
                 <li key={l.label}>
-                  <Link
-                    to={l.to}
-                    className="text-[13px] text-vault-muted transition-colors hover:text-white"
-                  >
+                  <Link to={l.to} className="footer-link">
                     {l.label}
                   </Link>
                 </li>
@@ -113,16 +115,11 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <p className="eyebrow mb-5">Help</p>
+            <p className="section-head mb-5">Help</p>
             <ul className="space-y-2.5">
               {HELP_LINKS.map((l) => (
                 <li key={l.label}>
-                  <a
-                    href={l.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[13px] text-vault-muted transition-colors hover:text-white"
-                  >
+                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="footer-link">
                     {l.label}
                   </a>
                 </li>
@@ -133,8 +130,8 @@ export default function Footer() {
 
         {/* 4 — Newsletter */}
         <div>
-          <p className="eyebrow mb-5">Newsletter</p>
-          <p className="mb-5 text-[13px] text-vault-muted">
+          <p className="section-head mb-5">Newsletter</p>
+          <p className="mb-5 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
             Sign up for exclusive offers, news and more.
           </p>
           <form className="flex flex-col gap-3" onSubmit={subscribe} noValidate>
@@ -155,32 +152,38 @@ export default function Footer() {
               }}
               placeholder="Email address"
               aria-invalid={!!error || undefined}
-              className="border border-vault-border bg-transparent px-4 py-3 text-[13px] text-white placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none"
+              className="border bg-transparent px-4 py-3 text-[13px] focus:outline-none"
+              style={{
+                borderColor: 'rgba(212,175,55,0.2)',
+                color: 'var(--text-primary)',
+                borderRadius: 'var(--radius-card)',
+              }}
             />
             {error && (
-              <p role="alert" className="text-[12px] text-gold">
+              <p role="alert" className="text-[12px]" style={{ color: 'var(--gold)' }}>
                 {error}
               </p>
             )}
-            <button type="submit" className="btn-primary w-full">
+            <button type="submit" className="btn-outline w-full">
               Subscribe
             </button>
           </form>
           <div className="mt-6 flex items-center gap-4">
-            <a href="https://www.facebook.com" aria-label="Facebook" className="text-vault-muted transition-colors hover:text-white">
+            <a href="https://www.facebook.com" aria-label="Facebook" style={{ color: 'var(--text-muted)' }} className="transition-colors hover:text-[#D4AF37]">
               <Facebook className="h-4 w-4" />
             </a>
-            <a href="https://www.instagram.com" aria-label="Instagram" className="text-vault-muted transition-colors hover:text-white">
+            <a href="https://www.instagram.com" aria-label="Instagram" style={{ color: 'var(--text-muted)' }} className="transition-colors hover:text-[#D4AF37]">
               <Instagram className="h-4 w-4" />
             </a>
           </div>
         </div>
       </div>
 
-      <div className="border-t border-vault-border">
+      {/* Hairline gold divider + copyright */}
+      <div style={{ borderTop: '1px solid rgba(212,175,55,0.15)' }}>
         <div className="mx-auto flex max-w-[1600px] items-center justify-between px-5 py-6 lg:px-8">
-          <p className="text-[12px] text-vault-faint">© 2026 The Vault Fitness.</p>
-          <p className="hidden text-[11px] uppercase tracking-[0.14em] text-vault-faint sm:block">
+          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>© 2026 The Vault Fitness.</p>
+          <p className="hidden text-[11px] uppercase tracking-[0.14em] sm:block" style={{ color: 'var(--text-muted)' }}>
             Sheung Wan · Hong Kong
           </p>
         </div>

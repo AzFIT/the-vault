@@ -1,18 +1,22 @@
-import { Fragment, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { useGSAP } from '@gsap/react'
-import { Star } from 'lucide-react'
-import { asset } from '@/lib/utils'
 import {
-  membershipPlans,
-  introPackage,
-  formatHKD,
-} from '@/data/mock'
+  Activity,
+  ArrowRight,
+  Check,
+  Crown,
+  Dumbbell,
+  HeartPulse,
+  Leaf,
+  Star,
+  TrendingUp,
+  Users,
+} from 'lucide-react'
+import { asset } from '@/lib/utils'
+import { membershipPlans, introPackage, formatHKD } from '@/data/mock'
 import EnquiryModal from '@/components/enquiry/EnquiryModal'
-
-gsap.registerPlugin(ScrollTrigger)
 
 const scrollToId = (id: string) =>
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -22,231 +26,165 @@ const reducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /* ------------------------------------------------------------------ */
-/* Small presentational helpers                                        */
+/* Motion helpers (Phase 2: replaces the old GSAP scroll choreography  */
+/* with one observer-driven fade-up + count-ups; functionality intact) */
 /* ------------------------------------------------------------------ */
 
-function Eyebrow({ children, onPhoto = false }: { children: string; onPhoto?: boolean }) {
-  return (
-    <p className={`eyebrow ${onPhoto ? 'eyebrow-on-photo' : ''}`}>{children}</p>
-  )
-}
-
-/** Character-level split for short headlines (GSAP targets .split-char) */
-function SplitChars({ text, className = '' }: { text: string; className?: string }) {
-  return (
-    <span className={className} aria-label={text}>
-      {text.split('').map((ch, i) => (
-        <span key={i} aria-hidden className="split-char inline-block will-change-transform">
-          {ch === ' ' ? ' ' : ch}
-        </span>
-      ))}
-    </span>
-  )
-}
-
-/**
- * Character split wrapped per word — chars animate individually
- * (.split-char, same GSAP reveal) but words are atomic
- * (whitespace-nowrap inline-block), so line breaks only occur
- * between words, never mid-word.
- */
-function SplitCharsByWord({ text, className = '' }: { text: string; className?: string }) {
-  const words = text.split(' ')
-  return (
-    <span className={className} aria-label={text}>
-      {words.map((word, wi) => (
-        <Fragment key={wi}>
-          <span aria-hidden className="inline-block whitespace-nowrap">
-            {word.split('').map((ch, ci) => (
-              <span key={ci} className="split-char inline-block will-change-transform">
-                {ch}
-              </span>
-            ))}
-          </span>
-          {/* Plain space between word wrappers: the only break
-              opportunity, trimmed cleanly at wrapped line ends */}
-          {wi < words.length - 1 ? ' ' : null}
-        </Fragment>
-      ))}
-    </span>
-  )
-}
-
-/** Word-level split for longer statements (GSAP targets .split-word) */
-function SplitWords({ text, className = '' }: { text: string; className?: string }) {
-  return (
-    <span className={className} aria-label={text}>
-      {text.split(' ').map((w, i) => (
-        <span key={i} aria-hidden className="split-word inline-block will-change-transform">
-          {w}
-          {i < text.split(' ').length - 1 ? ' ' : ''}
-        </span>
-      ))}
-    </span>
-  )
-}
-
-function ArrowBtn({
+function Rise({
   children,
-  variant = 'primary',
-  onClick,
-  to,
+  className = '',
+  delay = 0,
 }: {
-  children: string
-  variant?: 'primary' | 'outline' | 'gold'
-  onClick?: () => void
-  to?: string
+  children: ReactNode
+  className?: string
+  delay?: number
 }) {
-  const cls =
-    variant === 'primary' ? 'btn-primary' : variant === 'gold' ? 'btn-gold' : 'btn-outline'
-  const inner = (
-    <>
-      {children} <span className="btn-arrow">→</span>
-    </>
-  )
-  if (to)
-    return (
-      <Link to={to} className={cls}>
-        {inner}
-      </Link>
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.classList.add('is-in')
+          obs.disconnect()
+        }
+      },
+      { threshold: 0.12 },
     )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
   return (
-    <button onClick={onClick} className={cls}>
-      {inner}
-    </button>
+    <div ref={ref} className={`rise ${className}`} style={{ animationDelay: `${delay}ms` }}>
+      {children}
+    </div>
   )
 }
 
+function useCountUp(target: number) {
+  const [val, setVal] = useState(() => (reducedMotion() ? target : 0))
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || reducedMotion()) return
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return
+        obs.disconnect()
+        const start = performance.now()
+        const tick = (now: number) => {
+          const p = Math.min((now - start) / 1400, 1)
+          setVal(target * (1 - Math.pow(1 - p, 3)))
+          if (p < 1) requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+      },
+      { threshold: 0.4 },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [target])
+  return { ref, value: Math.round(val) }
+}
+
 /* ------------------------------------------------------------------ */
-/* Section 1 — Hero                                                    */
+/* Section 1 — Split hero (Phase 2 spec)                                */
 /* ------------------------------------------------------------------ */
+
 function Hero() {
+  const root = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (reducedMotion()) return
+    const q = root.current?.querySelectorAll('.hero-item')
+    if (!q?.length) return
+    gsap.from(q, { y: 28, opacity: 0, stagger: 0.12, duration: 0.9, delay: 0.2, ease: 'power3.out' })
+  }, [])
+
   return (
-    <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden">
-      <div className="absolute inset-0">
+    <section ref={root} className="grid lg:grid-cols-[45%_55%]">
+      {/* Left — pure black headline panel */}
+      <div
+        className="flex items-center bg-[#0D0D0F] px-5 py-16 md:px-12 md:py-24 lg:min-h-[calc(100svh-108px)] lg:py-0"
+      >
+        <div className="w-full max-w-xl">
+          <h1 className="hero-item h-display text-[34px] leading-[1.1] md:text-[56px]">
+            Train like it's <span className="gold-text">Valuable</span>
+          </h1>
+          <p
+            className="hero-item mt-5 text-[13px] font-semibold uppercase tracking-[0.22em]"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Unlock your fitness potential
+          </p>
+          <p className="hero-item mt-4 max-w-md text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
+            Sheung Wan's premier personal training gym — state-of-the-art equipment,
+            Hong Kong's first VIP personal training studio, and coaches with a
+            combined 30 years of experience.
+          </p>
+          <div className="hero-item mt-9 flex flex-col gap-4 sm:flex-row sm:items-center">
+            <button type="button" className="btn-gold w-full sm:w-auto" onClick={() => scrollToId('memberships')}>
+              Become a Member
+            </button>
+            <button type="button" className="btn-outline w-full sm:w-auto" onClick={() => scrollToId('classes')}>
+              Explore Classes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Right — moody gym photography, fading into the black panel */}
+      <div className="relative min-h-[46vh] lg:min-h-[calc(100svh-108px)]">
         <img
           src={asset('hero-home.jpg')}
           alt="Coach guiding a deadlift at The Vault Fitness"
-          className="kenburns h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover"
         />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(rgba(35,31,32,0.45), rgba(35,31,32,0.78))',
-          }}
-        />
-      </div>
-
-      <div className="relative z-10 mx-auto max-w-[15em] px-5 text-center">
-        <h1 className="hero-h1 text-[40px] font-bold leading-[1.05] md:text-[84px]">
-          <SplitCharsByWord text="Unlock your fitness potential" />
-        </h1>
-        <p className="hero-fade mx-auto mt-6 max-w-xl text-[15px] leading-[1.6] text-white/85">
-          Sheung Wan's premier personal training gym — state-of-the-art equipment,
-          Hong Kong's first VIP personal training studio, and coaches with a
-          combined 30 years of experience.
-        </p>
-        <div className="hero-fade mt-9 flex flex-wrap items-center justify-center gap-4">
-          <ArrowBtn onClick={() => scrollToId('memberships')}>Start Training</ArrowBtn>
-          <ArrowBtn variant="outline" onClick={() => scrollToId('memberships')}>
-            Join Gym
-          </ArrowBtn>
-        </div>
-      </div>
-
-      {/* Scroll cue */}
-      <div className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2">
-        <div className="relative h-12 w-px bg-white/30">
-          <span className="scroll-cue-dot absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white" />
-        </div>
+        <div className="hero-photo-fade absolute inset-0" />
       </div>
     </section>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 2 — Brand Statement                                         */
+/* Section 2 — Class cards strip (Phase 2 spec)                         */
 /* ------------------------------------------------------------------ */
-function BrandStatement() {
-  return (
-    <section className="bg-vault-bg py-[70px] md:py-[110px]">
-      <div className="mx-auto max-w-[720px] px-5 text-center">
-        <Eyebrow>The Vault Fitness · Sheung Wan</Eyebrow>
-        <h2 className="stmt mt-6 text-[27px] font-bold leading-[1.15] md:text-[34px]">
-          <SplitWords text="A premier Hong Kong training facility offering state-of-the-art equipment, a VIP personal training studio and spacious changing facilities — every detail designed with holistic wellness, quality movement and performance in mind." />
-        </h2>
-        <div className="stmt-rule mx-auto mt-8 h-px w-12 origin-center bg-white" />
-        <p className="stmt-sub mt-8 text-[13px] text-vault-muted">
-          Open gym memberships · One-to-one personal training · Corporate training
-        </p>
-      </div>
-    </section>
-  )
-}
 
-/* ------------------------------------------------------------------ */
-/* Section 3 — Services Grid                                           */
-/* ------------------------------------------------------------------ */
-const SERVICES = [
-  {
-    img: asset('card-pt.jpg'),
-    eyebrow: '1:1 Coaching',
-    title: 'Personal Training',
-    link: 'Start training →',
-    anchor: 'personal-training',
-  },
-  {
-    img: asset('card-classes.jpg'),
-    eyebrow: 'Small Group · Max 6',
-    title: 'Group Classes',
-    link: 'Learn more →',
-    anchor: 'group-classes',
-  },
-  {
-    img: asset('card-womens.jpg'),
-    eyebrow: 'Pre & Postnatal · Menopause',
-    title: "Women's Health",
-    link: 'Learn more →',
-    anchor: 'womens-health',
-  },
-  {
-    img: asset('card-membership.jpg'),
-    eyebrow: 'No Contract · No Joining Fees',
-    title: 'Memberships',
-    link: 'Access gym →',
-    anchor: 'memberships',
-  },
+const CLASSES = [
+  { name: 'Hyrox Class', chip: 'chip-teal', chipLabel: 'Race Prep', Icon: Activity },
+  { name: 'FITMAMA Strength', chip: 'chip-maroon', chipLabel: "Women's Health", Icon: HeartPulse },
+  { name: 'VIP 1-on-1', chip: 'chip-gold', chipLabel: 'Personal Training', Icon: Crown },
 ]
 
-function ServicesGrid() {
+function ClassStrip() {
   return (
-    <section className="bg-vault-bg pb-[80px] md:pb-[110px]">
-      <div className="mx-auto max-w-[1600px] px-4 md:px-5">
-        <div className="services-grid grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          {SERVICES.map((s) => (
-            <button
-              key={s.title}
-              onClick={() => scrollToId(s.anchor)}
-              className="service-card group relative block aspect-[4/3] overflow-hidden text-left"
-            >
-              <img
-                src={s.img}
-                alt={s.title}
-                loading="lazy"
-                // inline style: arbitrary duration/ease classes get dropped by TW 3.4
-                style={{ transitionDuration: '600ms', transitionTimingFunction: 'cubic-bezier(0.22,1,0.36,1)' }}
-                className="h-full w-full object-cover transition-transform group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[rgba(35,31,32,0.92)] via-[rgba(35,31,32,0.25)] to-transparent transition-opacity duration-500 group-hover:opacity-100" />
-              <div className="absolute inset-x-0 bottom-0 p-6">
-                <Eyebrow onPhoto>{s.eyebrow}</Eyebrow>
-                <h3 className="mt-2 text-2xl font-bold">{s.title}</h3>
-                <span className="mt-3 inline-block text-[13px] uppercase tracking-[0.08em] text-white/85 transition-transform duration-300 group-hover:translate-x-1.5">
-                  {s.link}
-                </span>
-              </div>
-            </button>
+    <section id="classes" className="bg-[#0D0D0F] py-14 md:py-20">
+      <div className="mx-auto max-w-[1600px] px-4 md:px-6">
+        <Rise>
+          <p className="section-head mb-6">Train With Us</p>
+        </Rise>
+        <div className="strip-no-bar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-3 lg:gap-6 lg:overflow-visible">
+          {CLASSES.map(({ name, chip, chipLabel, Icon }, i) => (
+            <Rise key={name} delay={i * 90} className="w-[70vw] shrink-0 snap-start lg:w-auto">
+              <Link
+                to="/dashboard"
+                className="card group flex h-full flex-col gap-5 transition-colors duration-300 hover:!border-[rgba(212,175,55,0.4)]"
+              >
+                <div className="flex items-center justify-between">
+                  <Icon size={26} strokeWidth={1.5} color="#D4AF37" aria-hidden />
+                  <span className={`chip ${chip}`}>{chipLabel}</span>
+                </div>
+                <div>
+                  <h3 className="h-display text-lg">{name}</h3>
+                  <span
+                    className="mt-2 inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.1em] transition-transform duration-300 group-hover:translate-x-1"
+                    style={{ color: 'var(--gold)' }}
+                  >
+                    Book now <ArrowRight size={13} aria-hidden />
+                  </span>
+                </div>
+              </Link>
+            </Rise>
           ))}
         </div>
       </div>
@@ -255,8 +193,192 @@ function ServicesGrid() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 4 — The Gym / Facilities                                    */
+/* Section 3 — Stats band (Phase 2 spec)                                */
 /* ------------------------------------------------------------------ */
+
+const STATS_BAND = [
+  { value: 12, suffix: 'K+', label: 'Sessions Delivered' },
+  { value: 127, suffix: '', label: 'Active Members' },
+  { value: 97, suffix: '%', label: 'Retention' },
+]
+
+function StatCard({ value, suffix, label }: (typeof STATS_BAND)[number]) {
+  const { ref, value: shown } = useCountUp(value)
+  return (
+    <div className="card flex flex-col items-center gap-2 py-8 text-center md:py-10">
+      <p className="gold-text tnum text-[34px] font-bold leading-none md:text-[52px]">
+        <span ref={ref}>{shown}</span>
+        {suffix}
+      </p>
+      <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>
+        {label}
+      </p>
+    </div>
+  )
+}
+
+function StatsBand() {
+  return (
+    <section className="bg-[#0D0D0F] pb-14 md:pb-20">
+      <div className="mx-auto grid max-w-[1600px] grid-cols-3 gap-3 px-4 md:gap-6 md:px-6">
+        {STATS_BAND.map((s) => (
+          <StatCard key={s.label} {...s} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Section 4 — Services grid (Phase 2 spec)                             */
+/* ------------------------------------------------------------------ */
+
+const SERVICES = [
+  { Icon: Dumbbell, title: 'Personal Training', blurb: '1:1 tailored coaching', action: () => scrollToId('personal-training') },
+  { Icon: Users, title: 'Group Classes', blurb: 'Small group · max 6', action: () => scrollToId('group-classes') },
+  { Icon: Leaf, title: 'Nutrition Coaching', blurb: 'Protocols that fit your training', action: () => scrollToId('personal-training') },
+  { Icon: TrendingUp, title: 'Progress Tracking', blurb: 'Metrics, reviewed with your coach', action: () => (window.location.href = '/dashboard') },
+]
+
+function ServicesGrid() {
+  return (
+    <section className="bg-[#0D0D0F] pb-16 md:pb-24">
+      <div className="mx-auto max-w-[1600px] px-4 md:px-6">
+        <Rise>
+          <p className="section-head mb-6">What We Do</p>
+        </Rise>
+        <div className="grid grid-cols-2 gap-3 md:gap-6 lg:grid-cols-4">
+          {SERVICES.map(({ Icon, title, blurb, action }, i) => (
+            <Rise key={title} delay={i * 80}>
+              <button
+                type="button"
+                onClick={action}
+                className="card flex h-full w-full flex-col items-start gap-4 text-left transition-colors duration-300 hover:!border-[rgba(212,175,55,0.4)]"
+              >
+                <Icon size={24} strokeWidth={1.5} color="#D4AF37" aria-hidden />
+                <span>
+                  <span className="h-display block text-[13px] md:text-sm">{title}</span>
+                  <span className="mt-1.5 block text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    {blurb}
+                  </span>
+                </span>
+              </button>
+            </Rise>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Section 5 — Your Progress (Phase 2 spec)                             */
+/* ------------------------------------------------------------------ */
+
+const RANGES = ['1M', '3M', '6M', '1Y'] as const
+const PROGRESS_DATA: Record<(typeof RANGES)[number], number[]> = {
+  '1M': [10, 14, 12, 18, 16, 22, 20, 26],
+  '3M': [8, 12, 10, 16, 14, 20, 18, 25, 22, 28, 26, 31],
+  '6M': [6, 10, 9, 14, 12, 17, 15, 21, 19, 24, 22, 27, 25, 30, 28, 33, 31, 36],
+  '1Y': [4, 8, 7, 11, 10, 14, 13, 17, 16, 20, 19, 23, 22, 26, 25, 29, 28, 32, 31, 35, 34, 38, 37, 42],
+}
+
+function ProgressChart() {
+  const [range, setRange] = useState<(typeof RANGES)[number]>('6M')
+  const points = PROGRESS_DATA[range]
+  const W = 640
+  const H = 220
+  const max = Math.max(...points)
+  const stepX = W / (points.length - 1)
+  const coords = points.map((v, i) => ({
+    x: i * stepX,
+    y: H - (v / max) * (H - 28) - 10,
+  }))
+  const line = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ')
+  const area = `${line} L${W},${H} L0,${H} Z`
+
+  return (
+    <section className="bg-[#0D0D0F] pb-16 md:pb-24">
+      <div className="mx-auto max-w-[1100px] px-4 md:px-6">
+        <Rise>
+          <div className="card">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+              <h2 className="h-display text-xl md:text-2xl">Your Progress</h2>
+              <div className="flex gap-2">
+                {RANGES.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className="range-chip"
+                    data-active={range === r}
+                    onClick={() => setRange(r)}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <svg className="gold-line-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Illustrative progress trend line" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="goldLineGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#D4AF37" stopOpacity="0.5" />
+                  <stop offset="100%" stopColor="#D4AF37" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {[0.25, 0.5, 0.75].map((f) => (
+                <line key={f} className="gold-line-chart__grid" x1="0" x2={W} y1={H * f} y2={H * f} />
+              ))}
+              <path className="gold-line-chart__area" d={area} />
+              <path className="gold-line-chart__line" d={line} />
+              {coords.map((c, i) => (
+                <circle key={i} className="gold-line-chart__dot" cx={c.x} cy={c.y} r="3.5" />
+              ))}
+            </svg>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+              <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                Illustrative progression — members track real numbers in the app.
+              </p>
+              <Link to="/dashboard" className="btn-outline !px-5 !py-2.5">
+                Start Tracking
+              </Link>
+            </div>
+          </div>
+        </Rise>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Section 6 — Brand statement (existing copy, re-themed)               */
+/* ------------------------------------------------------------------ */
+
+function BrandStatement() {
+  return (
+    <section className="bg-[#111214] py-[70px] md:py-[110px]">
+      <div className="mx-auto max-w-[760px] px-5 text-center">
+        <Rise>
+          <p className="section-head">The Vault Fitness · Sheung Wan</p>
+          <h2 className="mt-6 text-[24px] font-semibold leading-[1.25] md:text-[32px]" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+            A premier Hong Kong training facility offering state-of-the-art equipment,
+            a VIP personal training studio and spacious changing facilities — every
+            detail designed with holistic wellness, quality movement and performance
+            in mind.
+          </h2>
+          <div className="mx-auto mt-8 h-px w-12" style={{ background: 'var(--gold)' }} />
+          <p className="mt-8 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+            Open gym memberships · One-to-one personal training · Corporate training
+          </p>
+        </Rise>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Section 7 — Facilities (existing copy, re-themed)                    */
+/* ------------------------------------------------------------------ */
+
 const CHIPS: { label: string; tip: string }[] = [
   { label: '60KG Dumbbells', tip: 'Rare for Hong Kong' },
   { label: 'Ski Erg', tip: 'Concept 2' },
@@ -270,40 +392,43 @@ const CHIPS: { label: string; tip: string }[] = [
 
 function Facilities() {
   return (
-    <section id="the-gym" className="bg-vault-bg">
+    <section id="the-gym" className="bg-[#111214] pb-[80px] md:pb-[110px]">
       <div className="flex flex-col lg:flex-row">
-        <div className="relative min-h-[50vh] overflow-hidden lg:min-h-[70vh] lg:w-[55%]">
+        <div className="relative min-h-[46vh] overflow-hidden lg:min-h-[70vh] lg:w-[55%]">
           <img
             src={asset('gym-facilities.jpg')}
             alt="The Vault Fitness gym floor"
             loading="lazy"
-            className="facilities-img absolute inset-0 h-[120%] w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(17,18,20,0.25), rgba(17,18,20,0))' }} />
         </div>
-        <div className="facilities-copy flex items-center bg-vault-bg lg:w-[45%]">
-          <div className="px-6 py-16 md:px-16 md:py-20 lg:px-20">
-            <Eyebrow>Our Facilities</Eyebrow>
-            <h2 className="mt-5 text-[27px] font-bold leading-[1.15] md:text-[38px]">
-              High-quality, high-impact
-            </h2>
-            <p className="mt-6 max-w-xl text-[15px] leading-[1.7] text-white/85">
-              The gym features state-of-the-art equipment including treadmills,
-              step machines, Stairmaster, HIIT mill, HIIT bikes, cross-trainers,
-              rowing machines, Concept 2 Ski Erg, glute-specific machines, PANATA
-              Master Gluteus, PANATA Hip Thrust, a free weights area with
-              dumbbells up to 60kg, resistance and cable machines, and NAUTILUS
-              &amp; ATLANTIS strength equipment.
-            </p>
-            <div className="chip-row mt-8 flex flex-wrap gap-2.5">
-              {CHIPS.map((c) => (
-                <span key={c.label} className="equip-chip" title={c.tip}>
-                  {c.label}
-                </span>
-              ))}
-            </div>
-            <div className="mt-10">
-              <ArrowBtn onClick={() => scrollToId('memberships')}>Join Gym</ArrowBtn>
-            </div>
+        <div className="flex items-center bg-[#111214] lg:w-[45%]">
+          <div className="px-6 py-14 md:px-14 md:py-20 lg:px-16">
+            <Rise>
+              <p className="section-head">Our Facilities</p>
+              <h2 className="h-display mt-5 text-2xl md:text-3xl">High-quality, high-impact</h2>
+              <p className="mt-6 max-w-xl text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
+                The gym features state-of-the-art equipment including treadmills,
+                step machines, Stairmaster, HIIT mill, HIIT bikes, cross-trainers,
+                rowing machines, Concept 2 Ski Erg, glute-specific machines, PANATA
+                Master Gluteus, PANATA Hip Thrust, a free weights area with
+                dumbbells up to 60kg, resistance and cable machines, and NAUTILUS
+                &amp; ATLANTIS strength equipment.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-2.5">
+                {CHIPS.map((c) => (
+                  <span key={c.label} className="equip-chip" title={c.tip}>
+                    {c.label}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-10">
+                <button type="button" className="btn-gold" onClick={() => scrollToId('memberships')}>
+                  Join Gym
+                </button>
+              </div>
+            </Rise>
           </div>
         </div>
       </div>
@@ -312,11 +437,12 @@ function Facilities() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 5 — VIP Studio Band (pinned)                                */
+/* Section 8 — VIP Studio (existing copy, re-themed)                    */
 /* ------------------------------------------------------------------ */
+
 function VipStudio() {
   return (
-    <section id="vip" className="relative flex min-h-[80vh] items-center overflow-hidden">
+    <section id="vip" className="relative flex min-h-[70vh] items-center overflow-hidden">
       <img
         src={asset('vip-studio.jpg')}
         alt="Hong Kong's first VIP personal training studio"
@@ -325,152 +451,144 @@ function VipStudio() {
       />
       <div
         className="absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(90deg, rgba(35,31,32,0.88) 30%, rgba(35,31,32,0.25))',
-        }}
+        style={{ background: 'linear-gradient(90deg, rgba(13,13,15,0.92) 25%, rgba(13,13,15,0.3))' }}
       />
-      <div className="relative z-10 mx-auto w-full max-w-[1600px] px-6 md:px-16 lg:px-20">
-        <div className="max-w-[720px]">
-          <Eyebrow onPhoto>Hong Kong's First</Eyebrow>
-          <div className="mt-5 flex items-stretch gap-6">
-            <div id="vip-rule" className="w-px self-stretch bg-white" style={{ height: 120 }} />
-            <h2 id="vip-h2" className="text-[30px] font-bold leading-[1.1] md:text-[44px]">
-              VIP Personal
-              <br />
-              Training Studio
+      <div className="relative z-10 mx-auto w-full max-w-[1600px] px-6 py-20 md:px-16 lg:px-20">
+        <Rise>
+          <div className="max-w-[720px]">
+            <p className="section-head">Hong Kong's First</p>
+            <h2 className="h-display mt-5 text-[28px] leading-[1.15] md:text-[40px]">
+              VIP Personal<br />Training Studio
             </h2>
+            <p className="mt-6 max-w-xl text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
+              Fully equipped with strength and conditioning equipment — power racks,
+              cable machines, a free weights area with dumbbells up to 40kg and
+              ATLANTIS strength equipment — accessible through tailored personal
+              training sessions with one of our qualified coaches.
+            </p>
+            <div className="mt-9">
+              <Link to="/dashboard" className="btn-gold">
+                Book a Personal Trainer
+              </Link>
+            </div>
           </div>
-          <p id="vip-copy" className="mt-6 max-w-xl text-[15px] leading-[1.7] text-white/85">
-            Fully equipped with strength and conditioning equipment — power racks,
-            cable machines, a free weights area with dumbbells up to 40kg and
-            ATLANTIS strength equipment — accessible through tailored personal
-            training sessions with one of our qualified coaches.
-          </p>
-          <div id="vip-cta" className="mt-9">
-            <ArrowBtn to="/dashboard">Book a Personal Trainer</ArrowBtn>
-          </div>
-        </div>
+        </Rise>
       </div>
     </section>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 6 — Personal Training                                       */
+/* Section 9 — Personal Training (existing copy, re-themed)             */
 /* ------------------------------------------------------------------ */
-const STATS = [
+
+const PT_STATS = [
   { value: 30, suffix: '', label: 'Yrs combined coaching experience' },
   { value: 60, suffix: 'KG', label: 'Dumbbells — rare in HK' },
   { value: 78, suffix: '', label: 'Five-star Google reviews' },
   { value: 6, suffix: '', label: 'Max per group class' },
 ]
 
-const COACH_CARDS: { name: string; role: string; img?: string }[] = [
+const COACH_CARDS: { name: string; role: string }[] = [
   { name: 'Dan Kan', role: 'Head Coach & Co-Founder' },
   { name: 'Ziggy Makant', role: "Head of Women's Health" },
   { name: 'Teresa Riddle', role: 'Personal Trainer' },
   { name: 'Tarryn Maree', role: "Women's Health Trainer" },
 ]
 
+function PtStat({ value, suffix, label }: (typeof PT_STATS)[number]) {
+  const { ref, value: shown } = useCountUp(value)
+  return (
+    <div className="text-center">
+      <p className="gold-text tnum text-[40px] font-bold leading-none md:text-[52px]">
+        <span ref={ref}>{shown}</span>
+        {suffix && <span className="text-[20px] md:text-[26px]">{suffix}</span>}
+      </p>
+      <p className="mt-3 text-[11px] uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
+        {label}
+      </p>
+    </div>
+  )
+}
+
 function PersonalTraining() {
   return (
-    <section id="personal-training" className="bg-vault-bg py-[80px] md:py-[110px]">
-      <div className="mx-auto max-w-[720px] px-5 text-center">
-        <Eyebrow>Personal Training</Eyebrow>
-        <h2 className="mt-5 text-[27px] font-bold leading-[1.15] md:text-[38px]">
-          Unlock Peak Performance
-        </h2>
-        <p className="mt-6 text-[15px] leading-[1.7] text-white/85">
-          Become your best, strongest self with expert personal training. From
-          strength and conditioning and bodybuilding prep to rehab and functional
-          medicine — book 1-2-1 tailored training with one of our qualified
-          coaches. Test, don't guess: diagnostic testing, fat-storage pattern
-          analysis, and personalised training, nutrition and supplement protocols.
-        </p>
+    <section id="personal-training" className="bg-[#111214] py-[80px] md:py-[110px]">
+      <div className="mx-auto max-w-[760px] px-5 text-center">
+        <Rise>
+          <p className="section-head">Personal Training</p>
+          <h2 className="h-display mt-5 text-2xl md:text-3xl">Unlock Peak Performance</h2>
+          <p className="mt-6 text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
+            Become your best, strongest self with expert personal training. From
+            strength and conditioning and bodybuilding prep to rehab and functional
+            medicine — book 1-2-1 tailored training with one of our qualified
+            coaches. Test, don't guess: diagnostic testing, fat-storage pattern
+            analysis, and personalised training, nutrition and supplement protocols.
+          </p>
+        </Rise>
       </div>
 
-      {/* Stat strip */}
-      <div className="mx-auto mt-16 max-w-[1600px] px-5">
-        <div className="grid grid-cols-2 gap-y-10 border-t border-vault-border py-12 lg:grid-cols-4">
-          {STATS.map((s) => (
-            <div key={s.label} className="text-center">
-              <p className="tnum text-[48px] font-bold leading-none text-gold md:text-[60px]">
-                <span className="stat-num" data-target={s.value}>
-                  0
-                </span>
-                {s.suffix && <span className="text-[24px] md:text-[30px]">{s.suffix}</span>}
-              </p>
-              <p className="eyebrow mt-3">{s.label}</p>
-            </div>
+      <div className="mx-auto mt-14 max-w-[1600px] px-5">
+        <div
+          className="grid grid-cols-2 gap-y-10 border-t py-12 lg:grid-cols-4"
+          style={{ borderColor: 'rgba(212,175,55,0.15)' }}
+        >
+          {PT_STATS.map((s) => (
+            <PtStat key={s.label} {...s} />
           ))}
         </div>
       </div>
 
-      {/* Coach strip */}
       <div className="mx-auto mt-6 max-w-[1600px] px-5">
-        <div className="coach-strip flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 lg:grid lg:grid-cols-4 lg:overflow-visible">
+        <div className="strip-no-bar flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 lg:grid lg:grid-cols-4 lg:overflow-visible">
           {COACH_CARDS.map((c) => (
-            <div key={c.name} className="coach-card w-[260px] shrink-0 snap-start lg:w-auto">
-              <div className="aspect-[3/4] overflow-hidden bg-vault-surface">
-                {c.img ? (
-                  <img src={c.img} alt={c.name} loading="lazy" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center border border-vault-border">
-                    <span className="font-serif text-6xl text-vault-faint">
-                      {c.name.split(' ').map((n) => n[0]).join('')}
-                    </span>
-                  </div>
-                )}
+            <div key={c.name} className="w-[240px] shrink-0 snap-start lg:w-auto">
+              <div
+                className="flex aspect-[3/4] items-center justify-center border"
+                style={{ background: 'var(--bg-card)', borderColor: 'rgba(212,175,55,0.15)' }}
+              >
+                <span className="h-display text-5xl" style={{ color: 'var(--gold-muted)' }}>
+                  {c.name.split(' ').map((n) => n[0]).join('')}
+                </span>
               </div>
-              <h3 className="mt-4 text-[18px] font-bold">{c.name}</h3>
-              <p className="eyebrow mt-1.5">{c.role}</p>
+              <h3 className="mt-4 text-[17px] font-semibold" style={{ color: 'var(--text-primary)' }}>{c.name}</h3>
+              <p className="mt-1.5 text-[11px] uppercase tracking-[0.14em]" style={{ color: 'var(--gold)' }}>{c.role}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Introductory Package */}
       <div className="mx-auto mt-14 max-w-[720px] px-5">
-        <div className="package-card relative bg-vault-surface p-6 md:p-8">
-          <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
-            <rect
-              className="package-border"
-              x="0.5"
-              y="0.5"
-              width="calc(100% - 1px)"
-              height="calc(100% - 1px)"
-              fill="none"
-              stroke="rgba(255,255,255,0.7)"
-              strokeWidth="1"
-              pathLength={100}
-              style={{ width: 'calc(100% - 1px)', height: 'calc(100% - 1px)' }}
-            />
-          </svg>
-          <Eyebrow>Get Started</Eyebrow>
-          <h3 className="mt-3 text-[22px] font-bold md:text-2xl">
-            {introPackage.name} — {formatHKD(introPackage.priceHKD)}
-          </h3>
-          <ul className="mt-5 space-y-2.5">
-            {introPackage.includes.map((item) => (
-              <li key={item} className="flex items-start gap-3 text-[14px] text-white/85">
-                <span className="mt-[9px] h-px w-4 shrink-0 bg-white/60" />
-                {item}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-7">
-            <ArrowBtn onClick={() => scrollToId('memberships')}>Start Training</ArrowBtn>
+        <Rise>
+          <div className="card !border-[rgba(212,175,55,0.4)]">
+            <p className="section-head">Get Started</p>
+            <h3 className="h-display mt-3 text-xl md:text-2xl">
+              {introPackage.name} — <span className="gold-text tnum">{formatHKD(introPackage.priceHKD)}</span>
+            </h3>
+            <ul className="mt-5 space-y-2.5">
+              {introPackage.includes.map((item) => (
+                <li key={item} className="flex items-start gap-3 text-[14px]" style={{ color: 'var(--text-secondary)' }}>
+                  <Check size={15} className="mt-0.5 shrink-0" color="#D4AF37" aria-hidden />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-7">
+              <button type="button" className="btn-gold" onClick={() => scrollToId('memberships')}>
+                Start Training
+              </button>
+            </div>
           </div>
-        </div>
+        </Rise>
       </div>
     </section>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 7 — Group Classes                                           */
+/* Section 10 — Group Classes (existing copy, re-themed)                */
 /* ------------------------------------------------------------------ */
+
 const CLASS_CARDS = [
   {
     name: 'Strength',
@@ -484,46 +602,37 @@ const CLASS_CARDS = [
 
 function GroupClasses() {
   return (
-    <section id="group-classes" className="relative overflow-hidden bg-vault-bg py-[80px] md:py-[110px]">
-      <div
-        className="pointer-events-none absolute inset-y-0 right-0 hidden w-2/5 opacity-40 lg:block"
-        aria-hidden
-      >
-        <img src={asset('card-classes.jpg')} alt="" loading="lazy" className="h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-r from-vault-bg via-vault-bg/40 to-transparent" />
-      </div>
-
-      <div className="relative mx-auto grid max-w-[1600px] gap-14 px-6 md:px-16 lg:grid-cols-2 lg:px-20">
-        <div>
-          <Eyebrow>For All Fitness Levels</Eyebrow>
-          <h2 className="mt-5 text-[27px] font-bold leading-[1.15] md:text-[38px]">
-            Group Classes
-          </h2>
-          <p className="mt-6 max-w-xl text-[15px] leading-[1.7] text-white/85">
-            Small group training in our VIP Room, limited to 6 people per class to
-            ensure quality of coaching.
-          </p>
-          <p className="mt-10 text-[13px] text-vault-muted">
-            Drop-in · Members HK$150 / Non-members HK$350
-          </p>
-        </div>
-
-        <div className="class-cards space-y-5">
-          {CLASS_CARDS.map((c) => (
-            <div
-              key={c.name}
-              className="class-card border border-vault-border bg-vault-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:border-white/60"
-            >
-              <h3 className="text-xl font-bold">{c.name}</h3>
-              <p className="mt-3 text-[14px] leading-[1.7] text-white/80">{c.body}</p>
-              <Link
-                to="/dashboard"
-                className="group mt-5 inline-flex items-center gap-1 text-[13px] uppercase tracking-[0.08em] text-white"
-              >
-                Book now
-                <span className="transition-transform duration-200 group-hover:translate-x-1.5">→</span>
-              </Link>
-            </div>
+    <section id="group-classes" className="bg-[#0D0D0F] py-[80px] md:py-[110px]">
+      <div className="mx-auto grid max-w-[1600px] gap-14 px-6 md:px-16 lg:grid-cols-2 lg:px-20">
+        <Rise>
+          <div>
+            <p className="section-head">For All Fitness Levels</p>
+            <h2 className="h-display mt-5 text-2xl md:text-3xl">Group Classes</h2>
+            <p className="mt-6 max-w-xl text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
+              Small group training in our VIP Room, limited to 6 people per class to
+              ensure quality of coaching.
+            </p>
+            <p className="mt-10 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+              Drop-in · Members HK$150 / Non-members HK$350
+            </p>
+          </div>
+        </Rise>
+        <div className="space-y-5">
+          {CLASS_CARDS.map((c, i) => (
+            <Rise key={c.name} delay={i * 100}>
+              <div className="card transition-colors duration-300 hover:!border-[rgba(212,175,55,0.4)]">
+                <h3 className="h-display text-lg">{c.name}</h3>
+                <p className="mt-3 text-[14px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>{c.body}</p>
+                <Link
+                  to="/dashboard"
+                  className="group mt-5 inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.1em]"
+                  style={{ color: 'var(--gold)' }}
+                >
+                  Book now
+                  <ArrowRight size={13} className="transition-transform duration-200 group-hover:translate-x-1" aria-hidden />
+                </Link>
+              </div>
+            </Rise>
           ))}
         </div>
       </div>
@@ -532,8 +641,9 @@ function GroupClasses() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 8 — Women's Health                                          */
+/* Section 11 — Women's Health (existing copy, re-themed)               */
 /* ------------------------------------------------------------------ */
+
 function WomensHealth() {
   return (
     <section id="womens-health" className="relative flex min-h-[70vh] items-end overflow-hidden">
@@ -541,105 +651,162 @@ function WomensHealth() {
         src={asset('card-womens.jpg')}
         alt="Women training at The Vault"
         loading="lazy"
-        className="womens-bg absolute inset-0 h-[115%] w-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(35,31,32,0.92)] via-[rgba(35,31,32,0.35)] to-transparent" />
-      <div className="womens-panel relative z-10 mx-auto w-full max-w-[1600px] px-6 pb-16 md:px-16 md:pb-20 lg:px-20">
-        <div className="max-w-[720px]">
-          <Eyebrow onPhoto>Women's Health</Eyebrow>
-          <h2 className="mt-5 text-[27px] font-bold leading-[1.15] md:text-[38px]">
-            Strong at every stage
-          </h2>
-          <p className="mt-6 text-[15px] leading-[1.7] text-white/85">
-            Classes and programmes led by experts in pelvic health, birth
-            preparation, postnatal rehabilitation and the menopause transition —
-            from FITMAMA Strength and FITMAMA Restore to The Women's Programme
-            with weekly coach check-ins and a WhatsApp community.
-          </p>
-          <div className="womens-ctas mt-9 flex flex-wrap gap-4">
-            <ArrowBtn onClick={() => scrollToId('group-classes')}>Classes</ArrowBtn>
-            <ArrowBtn variant="outline" to="/dashboard">
-              Programme
-            </ArrowBtn>
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Section 9 — Memberships & Pricing                                   */
-/* ------------------------------------------------------------------ */
-function Memberships({ onEnquire }: { onEnquire: (planId: string) => void }) {
-  return (
-    <section id="memberships" className="bg-vault-bg py-[80px] md:py-[110px]">
-      <div className="mx-auto max-w-[720px] px-5 text-center">
-        <Eyebrow>Day Passes &amp; Gym Memberships</Eyebrow>
-        <h2 className="mt-5 text-[27px] font-bold leading-[1.15] md:text-[38px]">
-          The Vault Fitness
-        </h2>
-        <p className="mt-4 text-[15px] text-vault-muted">
-          Buy Day Passes, Monthly Passes or 12-Month Memberships.
-        </p>
-      </div>
-
-      <div className="mx-auto mt-14 max-w-[1200px] px-5">
-        <div className="pricing-grid grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {membershipPlans.map((p) => (
-            <div
-              key={p.id}
-              className={`pricing-card relative flex flex-col p-8 transition-transform duration-300 hover:-translate-y-1.5 ${
-                p.featured
-                  ? 'featured-pulse border border-gold bg-vault-surface'
-                  : 'border border-vault-border bg-vault-surface hover:border-white/40'
-              }`}
-            >
-              {p.badge && (
-                <span className="absolute -top-3 left-8 bg-gold px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-black">
-                  {p.badge}
-                </span>
-              )}
-              <p className={`eyebrow ${p.featured ? '' : '!text-vault-muted'}`}>{p.name}</p>
-              <p
-                className={`tnum mt-4 text-[44px] font-bold leading-none ${
-                  p.featured ? 'text-gold' : ''
-                }`}
-              >
-                {formatHKD(p.priceHKD)}
-                {p.period && (
-                  <span className="text-[16px] font-normal text-vault-muted">{p.period}</span>
-                )}
-              </p>
-              <p className="mt-4 flex-1 text-[13px] leading-[1.7] text-vault-muted">{p.note}</p>
-              <p
-                className={`mt-5 border-t pt-4 text-[12px] ${
-                  p.featured
-                    ? 'border-gold-dim/50 text-gold-dim'
-                    : 'border-vault-border text-vault-faint'
-                }`}
-              >
-                Main gym access · classes at member price
-              </p>
-              <div className="mt-6">
-                <ArrowBtn
-                  variant={p.featured ? 'gold' : 'outline'}
-                  onClick={() => onEnquire(p.id)}
-                >
-                  Join Gym
-                </ArrowBtn>
-              </div>
+      <div
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(180deg, rgba(13,13,15,0.35), rgba(13,13,15,0.92))' }}
+      />
+      <div className="relative z-10 mx-auto w-full max-w-[1600px] px-6 pb-16 md:px-16 md:pb-20 lg:px-20">
+        <Rise>
+          <div className="max-w-[720px]">
+            <p className="section-head">Women's Health</p>
+            <h2 className="h-display mt-5 text-2xl md:text-3xl">Strong at every stage</h2>
+            <p className="mt-6 text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
+              Classes and programmes led by experts in pelvic health, birth
+              preparation, postnatal rehabilitation and the menopause transition —
+              from FITMAMA Strength and FITMAMA Restore to The Women's Programme
+              with weekly coach check-ins and a WhatsApp community.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-4">
+              <button type="button" className="btn-gold" onClick={() => scrollToId('group-classes')}>
+                Classes
+              </button>
+              <Link to="/dashboard" className="btn-outline">
+                Programme
+              </Link>
             </div>
-          ))}
-        </div>
+          </div>
+        </Rise>
       </div>
     </section>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 10 — Reviews                                                */
+/* Section 12 — Memberships & Pricing (Phase 2 spec layout, real plans) */
 /* ------------------------------------------------------------------ */
+
+/** Spec tiers → real plan ids. Every plan stays reachable (strip below). */
+const TIERS = [
+  {
+    tier: 'Silver',
+    planId: 'month',
+    featured: false,
+    features: ['No joining fees', 'Towels, lockers, showers included', 'Main gym access', 'Classes at member price'],
+  },
+  {
+    tier: 'Gold',
+    planId: 'autopay',
+    featured: true,
+    features: ['Rolling — cancel anytime', 'No contract, no joining fees', 'Main gym access', 'Classes at member price'],
+  },
+  {
+    tier: 'Vault Access',
+    planId: 'year',
+    featured: false,
+    features: ['Payable up front', 'Best value per month', 'Main gym access', 'Classes at member price'],
+  },
+] as const
+
+const PASS_PLAN_IDS = ['day', 'week', 'six-month'] as const
+
+function Memberships({ onEnquire }: { onEnquire: (planId: string) => void }) {
+  const planOf = (id: string) => membershipPlans.find((p) => p.id === id)!
+
+  return (
+    <section id="memberships" className="bg-[#111214] py-[80px] md:py-[110px]">
+      <div className="mx-auto max-w-[720px] px-5 text-center">
+        <Rise>
+          <p className="section-head">Day Passes &amp; Gym Memberships</p>
+          <h2 className="h-display mt-5 text-2xl md:text-3xl">The Vault Fitness</h2>
+          <p className="mt-4 text-[15px]" style={{ color: 'var(--text-muted)' }}>
+            Buy Day Passes, Monthly Passes or 12-Month Memberships.
+          </p>
+        </Rise>
+      </div>
+
+      <div className="mx-auto mt-14 max-w-[1200px] px-4 md:px-5">
+        {/* Mobile: horizontal snap ~80% · Desktop: 3 across · NEVER stacked */}
+        <div className="strip-no-bar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-3 lg:gap-6 lg:overflow-visible">
+          {TIERS.map(({ tier, planId, featured, features }, i) => {
+            const plan = planOf(planId)
+            return (
+              <Rise key={tier} delay={i * 90} className="w-[80vw] shrink-0 snap-start lg:w-auto">
+                <div className={`pricing-card relative flex h-full flex-col p-7 md:p-8 ${featured ? 'pricing-card--featured' : ''}`}>
+                  {featured && (
+                    <span
+                      className="absolute -top-3 left-7 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                      style={{ background: 'var(--gold)', color: '#000' }}
+                    >
+                      Most Popular
+                    </span>
+                  )}
+                  <p className="h-display text-sm" style={{ color: featured ? 'var(--gold)' : 'var(--text-secondary)' }}>
+                    {tier}
+                  </p>
+                  <p className="tnum mt-4 text-[40px] font-bold leading-none" style={{ color: 'var(--text-primary)' }}>
+                    {formatHKD(plan.priceHKD)}
+                    {plan.period && (
+                      <span className="text-[15px] font-normal" style={{ color: 'var(--text-muted)' }}>{plan.period}</span>
+                    )}
+                  </p>
+                  <ul className="mt-6 flex-1 space-y-2.5">
+                    {features.map((f) => (
+                      <li key={f} className="flex items-start gap-2.5 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+                        <Check size={14} className="mt-0.5 shrink-0" color="#D4AF37" aria-hidden />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <p
+                    className="mt-5 border-t pt-4 text-[12px]"
+                    style={{ borderColor: 'rgba(212,175,55,0.15)', color: 'var(--text-muted)' }}
+                  >
+                    {plan.note}
+                  </p>
+                  <div className="mt-6">
+                    <button type="button" className="btn-gold w-full" onClick={() => onEnquire(plan.id)}>
+                      Join Gym
+                    </button>
+                  </div>
+                </div>
+              </Rise>
+            )
+          })}
+        </div>
+
+        {/* Remaining passes stay reachable (re-theme keeps all plans) */}
+        <Rise>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+            {PASS_PLAN_IDS.map((id) => {
+              const plan = planOf(id)
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onEnquire(plan.id)}
+                  className="group inline-flex items-center gap-2 text-[13px]"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <span className="transition-colors group-hover:text-[#D4AF37]">
+                    {plan.name} · <span className="tnum">{formatHKD(plan.priceHKD)}</span>
+                  </span>
+                  <ArrowRight size={13} color="#D4AF37" className="transition-transform duration-200 group-hover:translate-x-1" aria-hidden />
+                </button>
+              )
+            })}
+          </div>
+        </Rise>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Section 13 — Reviews (existing copy, re-themed)                      */
+/* ------------------------------------------------------------------ */
+
 const REVIEWS = [
   {
     quote: "Best-equipped gym in Hong Kong — 60kg dumbbells you won't find anywhere else.",
@@ -657,34 +824,35 @@ const REVIEWS = [
 
 function Reviews() {
   return (
-    <section className="bg-vault-bg py-[80px] md:py-[110px]">
+    <section className="bg-[#0D0D0F] py-[80px] md:py-[110px]">
       <div className="mx-auto max-w-[720px] px-5 text-center">
-        <Eyebrow>Google Reviews</Eyebrow>
-        <h2 className="mt-5 text-[27px] font-bold leading-[1.15] md:text-[38px]">
-          78 five-star reviews
-        </h2>
+        <Rise>
+          <p className="section-head">Google Reviews</p>
+          <h2 className="h-display mt-5 text-2xl md:text-3xl">78 five-star reviews</h2>
+        </Rise>
       </div>
       <div className="mx-auto mt-14 max-w-[1200px] px-5">
-        <div className="reviews-row flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 md:grid md:grid-cols-3 md:overflow-visible">
-          {REVIEWS.map((r) => (
-            <figure
-              key={r.name}
-              className="review-card w-[300px] shrink-0 snap-start border border-vault-border bg-vault-surface p-8 md:w-auto"
-            >
-              <div className="review-stars flex gap-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className="review-star h-4 w-4 fill-white text-white" />
-                ))}
-              </div>
-              <blockquote className="mt-5 text-[15px] leading-[1.7] text-white/90">
-                “{r.quote}”
-              </blockquote>
-              <figcaption className="mt-5 text-[13px] text-vault-muted">— {r.name}</figcaption>
-            </figure>
+        <div className="strip-no-bar flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 md:grid md:grid-cols-3 md:overflow-visible">
+          {REVIEWS.map((r, i) => (
+            <Rise key={r.name} delay={i * 90} className="w-[300px] shrink-0 snap-start md:w-auto">
+              <figure className="card h-full">
+                <div className="flex gap-1">
+                  {Array.from({ length: 5 }).map((_, si) => (
+                    <Star key={si} className="h-4 w-4" color="#D4AF37" fill="#D4AF37" aria-hidden />
+                  ))}
+                </div>
+                <blockquote className="mt-5 text-[15px] leading-[1.7]" style={{ color: 'var(--text-primary)' }}>
+                  “{r.quote}”
+                </blockquote>
+                <figcaption className="mt-5 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+                  — {r.name}
+                </figcaption>
+              </figure>
+            </Rise>
           ))}
         </div>
-        <p className="mt-8 text-center text-[13px] text-vault-muted">
-          <span className="tnum text-white">★★★★★</span> 78 Google Reviews
+        <p className="mt-8 text-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          <span style={{ color: 'var(--gold)' }}>★★★★★</span> 78 Google Reviews
         </p>
       </div>
     </section>
@@ -692,338 +860,108 @@ function Reviews() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 11 — Location / Visit                                       */
+/* Section 14 — Location / Visit (existing copy, re-themed)             */
 /* ------------------------------------------------------------------ */
+
 function Location() {
   return (
-    <section className="bg-vault-bg pb-[80px] md:pb-[110px]">
+    <section className="bg-[#0D0D0F] pb-[80px] md:pb-[110px]">
       <div className="mx-auto grid max-w-[1600px] items-center gap-12 px-6 md:px-16 lg:grid-cols-2 lg:px-20">
-        <div className="location-copy">
-          <Eyebrow>Find Us</Eyebrow>
-          <h2 className="mt-5 text-[27px] font-bold leading-[1.15] md:text-[38px]">
-            Sheung Wan, Hong Kong
-          </h2>
-          <div className="mt-8 space-y-5 text-[15px] leading-[1.7] text-white/85">
-            <p>
-              3/F Alliance Building, 133 Connaught Road,
-              <br />
-              Sheung Wan, Hong Kong
-            </p>
-            <p>
-              Mon–Fri · 6:30am–11:30pm
-              <br />
-              Sat, Sun &amp; Public Holidays · 8am–8pm
-            </p>
-            <p>WhatsApp / Phone · +852 2885 9300</p>
+        <Rise>
+          <div>
+            <p className="section-head">Find Us</p>
+            <h2 className="h-display mt-5 text-2xl md:text-3xl">Sheung Wan, Hong Kong</h2>
+            <div className="mt-8 space-y-5 text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
+              <p>
+                3/F Alliance Building, 133 Connaught Road,
+                <br />
+                Sheung Wan, Hong Kong
+              </p>
+              <p>
+                Mon–Fri · 6:30am–11:30pm
+                <br />
+                Sat, Sun &amp; Public Holidays · 8am–8pm
+              </p>
+              <p>WhatsApp / Phone · +852 2885 9300</p>
+            </div>
+            <div className="mt-9 flex flex-wrap gap-4">
+              <a
+                href="https://maps.google.com/?q=Alliance+Building,+133+Connaught+Road,+Sheung+Wan,+Hong+Kong"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-outline"
+              >
+                Directions
+              </a>
+              <a href="https://wa.me/85228859300" target="_blank" rel="noopener noreferrer" className="btn-outline">
+                Contact Us
+              </a>
+            </div>
           </div>
-          <div className="mt-9 flex flex-wrap gap-4">
-            <a
-              href="https://maps.google.com/?q=Alliance+Building,+133+Connaught+Road,+Sheung+Wan,+Hong+Kong"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary"
-            >
-              Directions <span className="btn-arrow">→</span>
-            </a>
-            <a href="https://wa.me/85228859300" target="_blank" rel="noopener noreferrer" className="btn-outline">
-              Contact Us <span className="btn-arrow">→</span>
-            </a>
+        </Rise>
+        <Rise delay={120}>
+          <div className="overflow-hidden">
+            <img
+              src={asset('entrance.jpg')}
+              alt="The Vault Fitness reception"
+              loading="lazy"
+              className="h-[40vh] w-full object-cover lg:h-[60vh]"
+              style={{ border: '1px solid rgba(212,175,55,0.15)', borderRadius: 'var(--radius-card)' }}
+            />
           </div>
-        </div>
-        <div className="location-img-wrap overflow-hidden">
-          <img
-            src={asset('entrance.jpg')}
-            alt="The Vault Fitness reception"
-            loading="lazy"
-            className="location-img h-[40vh] w-full object-cover lg:h-[60vh]"
-          />
-        </div>
+        </Rise>
       </div>
     </section>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/* Section 12 — Final CTA                                              */
+/* Section 15 — Final CTA (existing copy, re-themed)                    */
 /* ------------------------------------------------------------------ */
+
 function FinalCta() {
   return (
     <section
-      className="py-[100px] md:py-[160px]"
-      style={{
-        background:
-          'radial-gradient(ellipse 60% 55% at 50% 50%, #2c2728 0%, #231f20 70%)',
-      }}
+      className="py-[100px] md:py-[150px]"
+      style={{ background: 'radial-gradient(ellipse 60% 55% at 50% 50%, #17181B 0%, #0D0D0F 75%)' }}
     >
-      <div className="mx-auto max-w-[720px] px-5 text-center">
-        <h2 className="final-h2 text-[34px] font-bold leading-[1.1] md:text-[60px]">
-          <SplitChars text="Unlock your fitness potential" />
-        </h2>
-        <p className="final-fade mt-6 text-[15px] text-vault-muted">
-          No contract. No joining fees. Cancel anytime.
-        </p>
-        <div className="final-fade mt-10 flex flex-wrap items-center justify-center gap-4">
-          <ArrowBtn to="/dashboard">Start Training</ArrowBtn>
-          <ArrowBtn variant="outline" onClick={() => scrollToId('memberships')}>
-            Join Gym
-          </ArrowBtn>
-        </div>
+      <div className="mx-auto max-w-[760px] px-5 text-center">
+        <Rise>
+          <h2 className="h-display text-[30px] leading-[1.15] md:text-[52px]">
+            Unlock your <span className="gold-text">fitness potential</span>
+          </h2>
+          <p className="mt-6 text-[15px]" style={{ color: 'var(--text-muted)' }}>
+            No contract. No joining fees. Cancel anytime.
+          </p>
+          <div className="mt-10 flex flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-center">
+            <Link to="/dashboard" className="btn-gold">
+              Start Training
+            </Link>
+            <button type="button" className="btn-outline" onClick={() => scrollToId('memberships')}>
+              Join Gym
+            </button>
+          </div>
+        </Rise>
       </div>
     </section>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/* Page + GSAP scroll animation orchestration (design.md §6, home.md)  */
+/* Page                                                                 */
 /* ------------------------------------------------------------------ */
+
 export default function Home() {
-  const root = useRef<HTMLDivElement>(null)
   const [enquiryPlan, setEnquiryPlan] = useState<string | null>(null)
 
-  useGSAP(
-    () => {
-      if (reducedMotion()) return
-      const q = gsap.utils.selector(root)
-
-      // --- Hero: char reveal → subline/CTAs fade up (home.md §1) ---
-      gsap.from(q('.hero-h1 .split-char'), {
-        y: 30,
-        opacity: 0,
-        stagger: 0.025,
-        duration: 0.9,
-        delay: 0.3,
-        ease: 'power3.out',
-      })
-      gsap.from(q('.hero-fade'), {
-        y: 24,
-        opacity: 0,
-        duration: 0.8,
-        delay: 1.4,
-        stagger: 0.15,
-        ease: 'power2.out',
-      })
-
-      // --- Brand statement: word reveal + rule grow (§2) ---
-      gsap.from(q('.stmt .split-word'), {
-        scrollTrigger: { trigger: q('.stmt')[0], start: 'top 75%' },
-        y: 12,
-        opacity: 0,
-        stagger: 0.02,
-        duration: 0.6,
-        ease: 'power2.out',
-      })
-      gsap.from(q('.stmt-rule'), {
-        scrollTrigger: { trigger: q('.stmt')[0], start: 'top 75%' },
-        scaleX: 0,
-        duration: 0.6,
-        delay: 0.4,
-        ease: 'power2.out',
-      })
-      gsap.from(q('.stmt-sub'), {
-        scrollTrigger: { trigger: q('.stmt')[0], start: 'top 75%' },
-        opacity: 0,
-        y: 12,
-        duration: 0.6,
-        delay: 0.6,
-      })
-
-      // --- Services grid: card stagger (§3) ---
-      gsap.from(q('.service-card'), {
-        scrollTrigger: { trigger: q('.services-grid')[0], start: 'top 80%' },
-        y: 40,
-        opacity: 0,
-        stagger: 0.12,
-        duration: 0.7,
-        ease: 'power3.out',
-      })
-
-      // --- Facilities: parallax image + copy stagger + chips (§4) ---
-      gsap.to(q('.facilities-img'), {
-        scrollTrigger: {
-          trigger: '#the-gym',
-          start: 'top bottom',
-          end: 'bottom top',
-          scrub: true,
-        },
-        yPercent: -15,
-        ease: 'none',
-      })
-      gsap.from(q('.facilities-copy > div > *'), {
-        scrollTrigger: { trigger: q('.facilities-copy')[0], start: 'top 75%' },
-        y: 30,
-        opacity: 0,
-        stagger: 0.12,
-        duration: 0.8,
-        ease: 'power3.out',
-      })
-      gsap.from(q('.equip-chip'), {
-        scrollTrigger: { trigger: q('.chip-row')[0], start: 'top 85%' },
-        scale: 0.9,
-        opacity: 0,
-        stagger: 0.05,
-        duration: 0.4,
-        ease: 'back.out(1.6)',
-      })
-
-      // --- VIP band: pinned scrub (§5) ---
-      const vipTl = gsap.timeline({
-        scrollTrigger: {
-          trigger: '#vip',
-          start: 'top top',
-          end: '+=150%',
-          pin: true,
-          scrub: true,
-        },
-      })
-      vipTl
-        .fromTo(q('#vip-h2'), { x: -60 }, { x: 0, duration: 1, ease: 'none' }, 0)
-        .fromTo(q('#vip-rule'), { height: 0 }, { height: 120, duration: 1, ease: 'none' }, 0)
-        .fromTo(q('#vip-copy'), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4 }, 0)
-        .fromTo(q('#vip-cta'), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3 }, 0.7)
-
-      // --- PT stats count-up (§6) ---
-      gsap.utils.toArray<HTMLElement>(q('.stat-num')).forEach((el) => {
-        const target = Number(el.dataset.target ?? 0)
-        const obj = { v: 0 }
-        gsap.to(obj, {
-          scrollTrigger: { trigger: el, start: 'top 85%' },
-          v: target,
-          duration: 1.4,
-          ease: 'power2.out',
-          onUpdate: () => {
-            el.textContent = String(Math.round(obj.v))
-          },
-        })
-      })
-      gsap.from(q('.coach-card'), {
-        scrollTrigger: { trigger: q('.coach-strip')[0], start: 'top 80%' },
-        x: 60,
-        opacity: 0,
-        stagger: 0.15,
-        duration: 0.7,
-        ease: 'power3.out',
-      })
-      gsap.fromTo(
-        q('.package-border'),
-        { strokeDasharray: 100, strokeDashoffset: 100 },
-        {
-          scrollTrigger: { trigger: q('.package-card')[0], start: 'top 80%' },
-          strokeDashoffset: 0,
-          duration: 1,
-          ease: 'power2.inOut',
-        },
-      )
-
-      // --- Group classes: cards from right (§7) ---
-      gsap.from(q('.class-card'), {
-        scrollTrigger: { trigger: q('.class-cards')[0], start: 'top 78%' },
-        x: 60,
-        opacity: 0,
-        stagger: 0.15,
-        duration: 0.7,
-        ease: 'power3.out',
-      })
-
-      // --- Women's health: bg parallax + panel rise (§8) ---
-      gsap.to(q('.womens-bg'), {
-        scrollTrigger: {
-          trigger: '#womens-health',
-          start: 'top bottom',
-          end: 'bottom top',
-          scrub: true,
-        },
-        yPercent: -10,
-        ease: 'none',
-      })
-      gsap.from(q('.womens-panel'), {
-        scrollTrigger: { trigger: '#womens-health', start: 'top 70%' },
-        y: 60,
-        opacity: 0,
-        duration: 0.8,
-        ease: 'power3.out',
-      })
-      gsap.from(q('.womens-ctas > *'), {
-        scrollTrigger: { trigger: '#womens-health', start: 'top 70%' },
-        y: 20,
-        opacity: 0,
-        stagger: 0.1,
-        duration: 0.5,
-        delay: 0.4,
-      })
-
-      // --- Pricing: card stagger (§9) ---
-      gsap.from(q('.pricing-card'), {
-        scrollTrigger: { trigger: q('.pricing-grid')[0], start: 'top 80%' },
-        y: 30,
-        opacity: 0,
-        stagger: 0.08,
-        duration: 0.6,
-        ease: 'power3.out',
-      })
-
-      // --- Reviews: stars pop + cards fade (§10) ---
-      gsap.from(q('.review-card'), {
-        scrollTrigger: { trigger: q('.reviews-row')[0], start: 'top 78%' },
-        y: 24,
-        opacity: 0,
-        stagger: 0.12,
-        duration: 0.6,
-        ease: 'power3.out',
-      })
-      gsap.from(q('.review-star'), {
-        scrollTrigger: { trigger: q('.reviews-row')[0], start: 'top 78%' },
-        scale: 0,
-        stagger: 0.05,
-        duration: 0.35,
-        ease: 'back.out(2)',
-      })
-
-      // --- Location: clip-path reveal + copy stagger (§11) ---
-      gsap.fromTo(
-        q('.location-img-wrap'),
-        { clipPath: 'inset(0 0 100% 0)' },
-        {
-          scrollTrigger: { trigger: q('.location-img-wrap')[0], start: 'top 80%' },
-          clipPath: 'inset(0 0 0% 0)',
-          duration: 1,
-          ease: 'power3.inOut',
-        },
-      )
-      gsap.from(q('.location-copy > *'), {
-        scrollTrigger: { trigger: q('.location-copy')[0], start: 'top 78%' },
-        y: 30,
-        opacity: 0,
-        stagger: 0.12,
-        duration: 0.8,
-        ease: 'power3.out',
-      })
-
-      // --- Final CTA: char split on scroll (§12) ---
-      gsap.from(q('.final-h2 .split-char'), {
-        scrollTrigger: { trigger: q('.final-h2')[0], start: 'top 80%' },
-        y: 24,
-        opacity: 0,
-        stagger: 0.02,
-        duration: 0.7,
-        ease: 'power3.out',
-      })
-      gsap.from(q('.final-fade'), {
-        scrollTrigger: { trigger: q('.final-h2')[0], start: 'top 80%' },
-        y: 20,
-        opacity: 0,
-        stagger: 0.15,
-        duration: 0.6,
-        delay: 0.5,
-      })
-    },
-    { scope: root },
-  )
-
   return (
-    <div ref={root}>
+    <div className="tv2" style={{ background: 'var(--bg-deep)' }}>
       <Hero />
-      <BrandStatement />
+      <ClassStrip />
+      <StatsBand />
       <ServicesGrid />
+      <ProgressChart />
+      <BrandStatement />
       <Facilities />
       <VipStudio />
       <PersonalTraining />
