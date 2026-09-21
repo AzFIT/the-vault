@@ -1,0 +1,276 @@
+/* ===========================================================================
+ * THE VAULT FITNESS — DESIGN TOKENS (Phase 1: design-tokens)
+ * Source: the-vault-design-pack/prompts/the-vault-kimi-work-prompts-all-phases.txt
+ *
+ * HOW THIS FILE IS SCOPED (important):
+ *   The CSS custom properties below are global (`:root`) and change nothing by
+ *   themselves — nothing references them yet.
+ *   The component classes use the exact names from the spec (.card, .btn-gold,
+ *   .btn-outline, …) but are gated behind a `.tv2` wrapper so they CANNOT clash
+ *   with the pre-existing `.btn-gold` / `.btn-outline` marketing classes in
+ *   index.css. This is what guarantees the Phase 1 acceptance criterion
+ *   "no visual changes to pages yet": pages opt in by wrapping a subtree in
+ *   `<div className="tv2"> … </div>`. The /style-guide route is the first
+ *   (temporary) consumer; later phases wrap their surfaces the same way.
+ * =========================================================================== */
+
+:root {
+  /* ---- Backgrounds ---- */
+  --bg-deep: #0d0d0f;
+  --bg-charcoal: #111214;
+  --bg-card: #17181b;
+  --bg-elevated: #1d1e22;
+
+  /* ---- Gold scale (metallic gradients, never flat yellow) ---- */
+  --gold: #d4af37;
+  --gold-light: #e8c766;
+  --gold-dark: #a67c2e;
+  --gold-muted: #b8a26a;
+  --gold-gradient: linear-gradient(135deg, #e8c766 0%, #d4af37 45%, #a67c2e 100%);
+
+  /* ---- Text — NEVER pure white ---- */
+  --text-primary: #d8d8dc;
+  --text-secondary: #9a9a9e;
+  --text-muted: #6e6e73;
+
+  /* ---- Status ---- */
+  --status-danger: #7a2e2e;
+  --status-success: #2e5d3a;
+  --status-warning: #8a6d1e;
+
+  /* ---- Borders ---- */
+  --border-gold: 1px solid rgba(212, 175, 55, 0.4);
+  --border-hairline: 1px solid rgba(212, 175, 55, 0.15);
+
+  /* ---- Radii ---- */
+  --radius-card: 6px;
+  --radius-pill: 999px;
+
+  /* ---- Shadows ---- */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-gold-glow: 0 0 24px rgba(212, 175, 55, 0.15);
+
+  /* ---- Spacing scale (4 / 8 / 12 / 16 / 20 / 24 / 32 / 48) ----
+     Card padding: min 20px desktop, 12px mobile. Grid gutters: min 16px
+     desktop, 12px mobile. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-card-pad: 20px;
+  --space-gutter: 16px;
+
+  /* ---- Typography ---- */
+  --font-display: "Cinzel", "Montserrat", Georgia, serif;
+  --font-data: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* Tighter card padding + gutters on mobile (spec: 12px / 12px). */
+@media (max-width: 768px) {
+  :root {
+    --space-card-pad: 12px;
+    --space-gutter: 12px;
+  }
+}
+
+/* ===========================================================================
+ * COMPONENT CLASSES — exact spec names, gated behind `.tv2` (see header note)
+ * =========================================================================== */
+
+.tv2 {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-data);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tv2 :focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ---- .card — charcoal fill, hairline gold border, 6px radius.
+   Every component lives inside one. ---- */
+.tv2 .card {
+  background: var(--bg-card);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-card-pad);
+}
+
+/* ---- .btn-gold — solid gold gradient fill, black text. ONE per view max. ---- */
+.tv2 .btn-gold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  background: var(--gold-gradient);
+  color: #000000;
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1.2em 2.2em;
+  border: none;
+  border-radius: var(--radius-card);
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+}
+.tv2 .btn-gold:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-gold-glow);
+}
+.tv2 .btn-gold:active {
+  transform: scale(0.98);
+}
+.tv2 .btn-gold:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ---- .btn-outline — hollow gold border, gold text ---- */
+.tv2 .btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  background: transparent;
+  color: var(--gold);
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1.2em 2.2em;
+  border: var(--border-gold);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+.tv2 .btn-outline:hover {
+  background: rgba(212, 175, 55, 0.08);
+  transform: translateY(-1px);
+}
+.tv2 .btn-outline:active {
+  transform: scale(0.98);
+}
+
+/* ---- Status pills — small uppercase pills ---- */
+.tv2 .pill-status-danger,
+.tv2 .pill-status-success,
+.tv2 .pill-status-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.4em 1em;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.tv2 .pill-status-danger {
+  color: #d98f8f;
+  background: rgba(122, 46, 46, 0.35);
+  border-color: rgba(122, 46, 46, 0.8);
+}
+.tv2 .pill-status-success {
+  color: #8fc7a0;
+  background: rgba(46, 93, 58, 0.35);
+  border-color: rgba(46, 93, 58, 0.8);
+}
+.tv2 .pill-status-warning {
+  color: #d9bd6a;
+  background: rgba(138, 109, 30, 0.35);
+  border-color: rgba(138, 109, 30, 0.8);
+}
+
+/* ---- .gold-line-chart — glowing gold trendline on black canvas ---- */
+.tv2 .gold-line-chart {
+  display: block;
+  width: 100%;
+  background: var(--bg-deep);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+}
+.tv2 .gold-line-chart .gold-line-chart__line {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.55));
+}
+.tv2 .gold-line-chart .gold-line-chart__area {
+  fill: url(#goldLineGradient);
+  opacity: 0.35;
+}
+.tv2 .gold-line-chart .gold-line-chart__grid {
+  stroke: rgba(212, 175, 55, 0.08);
+  stroke-width: 1;
+}
+.tv2 .gold-line-chart .gold-line-chart__dot {
+  fill: var(--gold-light);
+  stroke: var(--bg-deep);
+  stroke-width: 2;
+}
+
+/* ---- Typography classes ---- */
+.tv2 .h-display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+.tv2 .h-display--gradient {
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.tv2 .body-data {
+  font-family: var(--font-data);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- .brand-logo — actual TV logo asset, gold-on-dark, with wordmark ---- */
+.tv2 .brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+}
+.tv2 .brand-logo img {
+  display: block;
+  height: 28px; /* navbar size; override to 36px in sidebars */
+  width: auto;
+}
+.tv2 .brand-logo--sidebar img {
+  height: 36px;
+}
+.tv2 .brand-logo__wordmark {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+}

@@ -1,6 +1,9 @@
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import './index.css'
+// Phase 1 design tokens — loaded after index.css; component classes are gated
+// behind a `.tv2` wrapper so no existing page changes visually.
+import './tokens.css'
 import App from './App.tsx'
 
 // Vite BASE_URL follows `base` in vite.config.ts: './' locally (→ ''),

@@ -27,6 +27,8 @@ const FrontDesk = lazy(() => import('./pages/FrontDesk'))
 const FrontDeskCheckIn = lazy(() => import('./pages/FrontDeskCheckIn'))
 const FrontDeskPOS = lazy(() => import('./pages/FrontDeskPOS'))
 const FrontDeskFollowUps = lazy(() => import('./pages/FrontDeskFollowUps'))
+// Phase 1 (temporary): design-token showcase for review — removed in Phase 5
+const StyleGuide = lazy(() => import('./pages/StyleGuide'))
 
 /** Centered gold spinner while a route chunk loads. */
 function PageFallback() {
@@ -77,6 +79,9 @@ export default function App() {
       {/* Printable monthly revenue report — no chrome so prints stay clean;
           unguarded while auth is tester-mode (same trade-off as /intake) */}
       <Route path="/portal/insights/report" element={page(<PortalInsightsReport />)} />
+
+      {/* Phase 1 design-token showcase — temporary, no chrome */}
+      <Route path="/style-guide" element={page(<StyleGuide />)} />
 
       {/* Management portal — Phase A tester sign-in (no real auth yet) */}
       <Route path="/portal/login" element={page(<PortalLogin />)} />
