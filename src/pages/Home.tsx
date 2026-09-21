@@ -109,14 +109,8 @@ function Hero() {
       >
         <div className="w-full max-w-xl">
           <h1 className="hero-item h-display text-[34px] leading-[1.1] md:text-[56px]">
-            Train like it's <span className="gold-text">Valuable</span>
+            Unlock your fitness <span className="gold-text">Potential</span>
           </h1>
-          <p
-            className="hero-item mt-5 text-[13px] font-semibold uppercase tracking-[0.22em]"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            Unlock your fitness potential
-          </p>
           <p className="hero-item mt-4 max-w-md text-[15px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>
             Sheung Wan's premier personal training gym — state-of-the-art equipment,
             Hong Kong's first VIP personal training studio, and coaches with a
