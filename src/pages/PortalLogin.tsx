@@ -37,7 +37,7 @@ export default function PortalLogin() {
           </Link>
           <h1
             className="mt-10 text-3xl md:text-4xl"
-            style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--gold-light)' }}
+            style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--gold-light)' }}
           >
             Management Portal
           </h1>

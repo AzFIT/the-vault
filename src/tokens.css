@@ -65,7 +65,7 @@
   --space-gutter: 16px;
 
   /* ---- Typography ---- */
-  --font-display: "Nunito", "Cinzel", "Montserrat", Georgia, serif;
+  --font-display: "Cinzel", "Montserrat", Georgia, serif;
   --font-data: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
@@ -231,8 +231,8 @@
 /* ---- Typography classes ---- */
 .tv2 .h-display {
   font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   line-height: 1.15;
   color: var(--text-primary);
 }
