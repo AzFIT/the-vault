@@ -1,8 +1,13 @@
 /**
- * Enquiry persistence — no backend yet, so submissions are stored in
- * localStorage. To go live, replace the body of `submitEnquiry` with a
- * fetch()/Supabase insert; the call sites and the `Enquiry` shape stay
- * exactly the same.
+ * Enquiry persistence — two layers:
+ *
+ * 1. CLOUD (primary): every submission is lodged through the Supabase
+ *    `enquiries-inbox` Edge Function (public 'submit' action, service-key
+ *    insert). Reading leads is PII and goes through the staff-gated
+ *    'list'/'update' actions with the publishable key unable to read.
+ * 2. LOCAL (cache/fallback): records also stay in localStorage so the CRM
+ *    keeps working offline and submissions made before the cloud insert
+ *    resolves are never lost. The Enquiries page merges both sources.
  */
 
 export type EnquiryRoute = 'reception' | 'senior'
@@ -22,6 +27,96 @@ export interface Enquiry {
   status: EnquiryStatus
   /** Full form payload (shape differs between pass / membership forms) */
   payload: Record<string, unknown>
+  /** Supabase row id once the cloud mirror has landed */
+  cloudId?: string
+}
+
+// ---------------------------------------------------------------------------
+// Cloud layer
+// ---------------------------------------------------------------------------
+
+/**
+ * Demo-grade staff gate, same model as the save-program edge function.
+ * Reading leads requires this key in the x-staff-key header. Replace with
+ * Supabase Auth + staff roles before go-live.
+ */
+const INBOX_URL =
+  'https://gcurvjprfwecbchreieu.supabase.co/functions/v1/enquiries-inbox'
+const STAFF_KEY = 'vault_enq_3d8b52f1a947c60e'
+
+/**
+ * Mirror a submission into Supabase via the enquiries-inbox edge function
+ * (public 'submit' action — server-side insert with the service key).
+ * Never throws — localStorage is the fallback.
+ */
+async function cloudInsert(rec: Enquiry): Promise<string | null> {
+  const p = rec.payload
+  try {
+    const res = await fetch(INBOX_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'submit',
+        enquiry: {
+          source: rec.plan,
+          title: rec.planLabel,
+          contact_name: (p.name as string) ?? null,
+          contact_phone: (p.mobile as string) ?? null,
+          contact_email: (p.email as string) ?? null,
+          preferred_channels: Array.isArray(p.preferredContact)
+            ? (p.preferredContact as string[])
+            : [],
+          best_time: (p.bestTime as string) ?? null,
+          payload: { ...p, route: rec.route, plan: rec.plan, planLabel: rec.planLabel },
+        },
+      }),
+    })
+    if (!res.ok) throw new Error(`submit ${res.status}`)
+    const data = (await res.json()) as { id?: string }
+    return data.id ?? null
+  } catch (err) {
+    console.warn('[enquiries] cloud insert failed, kept locally only', err)
+    return null
+  }
+}
+
+/** Staff-gated cloud read. Returns [] when the network/gate fails. */
+export async function fetchCloudEnquiries(): Promise<Enquiry[]> {
+  try {
+    const res = await fetch(INBOX_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-staff-key': STAFF_KEY },
+      body: JSON.stringify({ action: 'list' }),
+    })
+    if (!res.ok) throw new Error(`inbox ${res.status}`)
+    const data = (await res.json()) as { enquiries: Record<string, unknown>[] }
+    return (data.enquiries ?? []).map((row) => {
+      const payload = (row.payload as Record<string, unknown>) ?? {}
+      const dbStatus = String(row.status ?? 'New')
+      return {
+        id: `cloud_${String(row.id)}`,
+        cloudId: String(row.id),
+        route: (payload.route as EnquiryRoute) ?? 'reception',
+        plan: String(payload.plan ?? row.source ?? 'general'),
+        planLabel: String(row.title ?? 'Enquiry'),
+        createdAt: String(row.created_at),
+        status: dbStatus === 'New' ? 'new' : 'contacted',
+        payload,
+      }
+    })
+  } catch (err) {
+    console.warn('[enquiries] cloud fetch failed, showing local only', err)
+    return []
+  }
+}
+
+/** Fire-and-forget status patch on the cloud row. */
+function cloudUpdate(cloudId: string, patch: Record<string, unknown>) {
+  void fetch(INBOX_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-staff-key': STAFF_KEY },
+    body: JSON.stringify({ action: 'update', id: cloudId, ...patch }),
+  }).catch((err) => console.warn('[enquiries] cloud update failed', err))
 }
 
 const STORAGE_KEY = 'vault-enquiries'
@@ -58,8 +153,9 @@ export function countNewEnquiries(): number {
 }
 
 /**
- * Persist an enquiry. Returns the stored record.
- * Swap this one function for a real API call when the backend lands.
+ * Persist an enquiry: mirror to Supabase (primary) and localStorage
+ * (cache/fallback). Returns the stored record with cloudId attached when
+ * the cloud insert landed.
  */
 export async function submitEnquiry(
   data: Omit<Enquiry, 'id' | 'createdAt' | 'status'>,
@@ -70,16 +166,21 @@ export async function submitEnquiry(
     createdAt: new Date().toISOString(),
     status: 'new',
   }
+  const cloudId = await cloudInsert(record)
+  if (cloudId) record.cloudId = cloudId
   try {
     saveAll([...listEnquiries(), record])
   } catch {
-    // storage unavailable — still resolve so the UI can confirm
+    // storage unavailable — cloud copy still holds the record
   }
   return record
 }
 
 export function markContacted(id: string) {
-  saveAll(listEnquiries().map((e) => (e.id === id ? { ...e, status: 'contacted' } : e)))
+  const all = listEnquiries()
+  const target = all.find((e) => e.id === id)
+  if (target?.cloudId) cloudUpdate(target.cloudId, { status: 'Contacted' })
+  saveAll(all.map((e) => (e.id === id ? { ...e, status: 'contacted' } : e)))
 }
 
 /** Download all enquiries as a CSV file. */

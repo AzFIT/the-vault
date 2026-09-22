@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Copy, Download, Inbox, MessageCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   ENQUIRIES_CHANGED_EVENT,
   exportCsv,
+  fetchCloudEnquiries,
   listEnquiries,
   markContacted,
 } from '@/lib/enquiries'
@@ -99,17 +100,35 @@ export default function Enquiries() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Refresh when a submission lands (custom event from lib/enquiries) or
-  // another tab writes to storage.
+  // Merge local submissions with the cloud inbox: cloud rows first, then
+  // any local-only entries (offline submissions whose cloud insert failed,
+  // or records saved before cloud mirroring existed). Dedupe by cloudId —
+  // a local record whose cloud mirror landed IS its cloud row.
+  const refresh = useCallback(async () => {
+    const local = listEnquiries()
+    const cloud = await fetchCloudEnquiries()
+    if (cloud.length === 0) {
+      setEnquiries(local)
+      return
+    }
+    const cloudIds = new Set(cloud.map((c) => c.cloudId))
+    const localOnly = local.filter((l) => !l.cloudId || !cloudIds.has(l.cloudId))
+    setEnquiries([...cloud, ...localOnly])
+  }, [])
+
+  // Initial load + refresh when a submission lands (custom event from
+  // lib/enquiries) or another tab writes to storage.
   useEffect(() => {
-    const refresh = () => setEnquiries(listEnquiries())
+    void refresh()
+  }, [refresh])
+  useEffect(() => {
     window.addEventListener(ENQUIRIES_CHANGED_EVENT, refresh)
     window.addEventListener('storage', refresh)
     return () => {
       window.removeEventListener(ENQUIRIES_CHANGED_EVENT, refresh)
       window.removeEventListener('storage', refresh)
     }
-  }, [])
+  }, [refresh])
 
   // The open enquiry is derived from the store, so "Mark as contacted"
   // updates the drawer in place.
