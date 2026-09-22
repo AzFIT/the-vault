@@ -35,7 +35,7 @@ const NAV_TODAY: DeskNavItem[] = [
 const NAV_STUDIO: DeskNavItem[] = [
   { label: 'Schedule', to: '/portal/desk-schedule' },
   { label: 'Clients', soon: true },
-  { label: 'Enquiries', to: '/admin/enquiries' },
+  { label: 'Enquiries', to: '/portal/desk-enquiries' },
 ]
 
 const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
@@ -44,6 +44,7 @@ const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
   '/portal/pos': { eyebrow: 'Staff', title: 'Point of sale' },
   '/portal/follow-ups': { eyebrow: 'Staff', title: 'Follow-ups' },
   '/portal/desk-schedule': { eyebrow: 'Studio', title: 'Schedule' },
+  '/portal/desk-enquiries': { eyebrow: 'Studio', title: 'Enquiries inbox' },
 }
 
 const COLLAPSE_KEY = 'vault-sidebar-collapsed'

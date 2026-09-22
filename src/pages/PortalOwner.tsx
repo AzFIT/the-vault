@@ -476,7 +476,7 @@ function Rail() {
       title: 'New enquiries',
       count: newEnquiries,
       note: 'membership · trial — reply via CRM',
-      link: '/admin/enquiries',
+      link: '/portal/ops/enquiries',
       chipCls: 'bg-gold text-black',
     },
     { title: 'Memberships expiring', count: 2, note: 'within 14 days — send renewal', chipCls: 'bg-[#8a6d1e] text-black' },

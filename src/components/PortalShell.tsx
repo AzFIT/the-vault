@@ -35,18 +35,21 @@ const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
   '/portal/insights': { eyebrow: 'Grow', title: 'Revenue & performance' },
   '/portal/settings': { eyebrow: 'Manage', title: 'Settings' },
   '/portal/services': { eyebrow: 'Manage', title: 'Services & Products' },
+  '/portal/ops/check-in': { eyebrow: 'Operate', title: 'Check in' },
+  '/portal/ops/pos': { eyebrow: 'Grow', title: 'Point of sale' },
+  '/portal/ops/enquiries': { eyebrow: 'Grow', title: 'Enquiries inbox' },
 }
 
 const NAV_OPERATE: PortalNavItem[] = [
   { label: 'Dashboard', to: '/portal' },
   { label: 'Schedule', to: '/portal/schedule' },
-  { label: 'Check In', to: '/portal/check-in' },
+  { label: 'Check In', to: '/portal/ops/check-in' },
   { label: 'Rooms', soon: true },
 ]
 const NAV_GROW: PortalNavItem[] = [
   { label: 'Clients', to: '/portal/clients' },
-  { label: 'Enquiries', to: '/admin/enquiries' },
-  { label: 'Point of Sale', to: '/portal/pos' },
+  { label: 'Enquiries', to: '/portal/ops/enquiries' },
+  { label: 'Point of Sale', to: '/portal/ops/pos' },
   { label: 'Insights', to: '/portal/insights' },
   { label: 'Marketing', soon: true },
 ]

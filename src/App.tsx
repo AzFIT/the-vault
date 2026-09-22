@@ -74,6 +74,13 @@ export default function App() {
         <Route path="/portal/insights" element={page(<PortalInsights />)} />
         <Route path="/portal/settings" element={page(<PortalSettings />)} />
         <Route path="/portal/services" element={page(<PortalServices />)} />
+        {/* Owner-context duplicates of shared work surfaces — same page
+            components, but rendered inside the owner shell so the sidebar
+            stays the owner's. The /portal/check-in + /portal/pos routes
+            remain for the front-desk shell. */}
+        <Route path="/portal/ops/check-in" element={page(<FrontDeskCheckIn />)} />
+        <Route path="/portal/ops/pos" element={page(<FrontDeskPOS />)} />
+        <Route path="/portal/ops/enquiries" element={page(<Enquiries />)} />
       </Route>
 
       {/* Retired management view — graduated into the owner portal */}
@@ -105,6 +112,7 @@ export default function App() {
         <Route path="/portal/pos" element={page(<FrontDeskPOS />)} />
         <Route path="/portal/follow-ups" element={page(<FrontDeskFollowUps />)} />
         <Route path="/portal/desk-schedule" element={page(<PortalSchedule />)} />
+        <Route path="/portal/desk-enquiries" element={page(<Enquiries />)} />
       </Route>
     </Routes>
   )
