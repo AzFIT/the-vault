@@ -537,7 +537,7 @@ export default function PortalOwner() {
     <div className="space-y-6 md:space-y-8">
       <div>
         <p className="section-head">Owner portal</p>
-        <h2 className="h-display mt-2 text-2xl md:text-3xl" style={{ color: 'var(--gold)' }}>
+        <h2 className="h-display mt-2 text-2xl md:text-3xl" style={{ color: 'var(--gold-light)' }}>
           {greeting()}, Dan
         </h2>
         <p className="mt-1 text-[13px] text-vault-muted">

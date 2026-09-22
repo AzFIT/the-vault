@@ -78,7 +78,7 @@ export default function Coach() {
             <p className="section-head">Trainer portal</p>
             <h2
               className="h-display mt-2 text-2xl md:text-3xl"
-              style={{ color: 'var(--gold)' }}
+              style={{ color: 'var(--gold-light)' }}
             >
               Good morning, Dan
             </h2>

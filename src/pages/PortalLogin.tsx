@@ -28,14 +28,19 @@ export default function PortalLogin() {
   }
 
   return (
-    <div className="app-black tv2 grid min-h-[100dvh] bg-vault-bg text-white lg:grid-cols-2">
+    <div className="app-black tv2 grid min-h-[100dvh] bg-vault-bg text-white lg:grid-cols-2" style={{ background: '#141518' }}>
       {/* Brand panel */}
       <div className="flex flex-col justify-between border-b border-vault-border p-8 md:p-12 lg:border-b-0 lg:border-r">
         <div>
           <Link to="/" aria-label="The Vault Fitness — home" className="inline-flex items-center gap-3">
             <img src={asset('brand/vault-logo-full.png')} alt="The Vault Fitness" className="h-12 w-auto" />
           </Link>
-          <h1 className="mt-10 font-serif text-3xl font-bold md:text-4xl">Management Portal</h1>
+          <h1
+            className="mt-10 text-3xl md:text-4xl"
+            style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--gold-light)' }}
+          >
+            Management Portal
+          </h1>
           <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-vault-muted">
             Scheduling, revenue and staff performance — the studio at a glance,
             before the first coffee.

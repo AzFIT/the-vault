@@ -34,7 +34,7 @@ export default function GreetingStrip() {
           initial="hidden"
           animate="show"
           className="h-display mt-2 text-[34px] leading-tight"
-          style={{ color: 'var(--gold)' }}
+          style={{ color: 'var(--gold-light)' }}
         >
           {`Good morning, ${firstName}`.split(' ').map((w, i) => (
             <motion.span key={i} variants={word} className="inline-block">

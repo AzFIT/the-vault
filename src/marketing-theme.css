@@ -28,10 +28,10 @@
 .tv2 .section-head {
   font-family: var(--font-display);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--gold-light);
 }
 
 /* ---- Scroll fade-up (replaces the old per-section GSAP choreography) ---- */
