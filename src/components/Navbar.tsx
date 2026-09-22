@@ -96,7 +96,7 @@ export default function Navbar() {
             Staff
           </Link>
           <Link
-            to="/dashboard"
+            to="/enter"
             className="hidden text-[13px] uppercase tracking-[0.12em] md:inline"
             style={{ color: 'var(--text-muted)' }}
           >
