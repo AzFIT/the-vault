@@ -5,16 +5,48 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  CloudDownload,
   Copy,
+  Database,
+  Download,
+  ExternalLink,
+  FileSpreadsheet,
   GripVertical,
+  Link2,
   Plus,
+  RefreshCw,
   Save,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { coachClients, programs } from '@/data/mock'
 import type { Client } from '@/data/mock'
+import type { LibraryExercise } from '@/lib/exerciseLibrary'
+import {
+  assignProgramToClient,
+  loadClientsFromSupabase,
+  loadProgramsFromSupabase,
+  saveProgramToSupabase,
+} from '@/lib/programSave'
+import type {
+  ClientSummary,
+  LoadedProgram,
+  SaveProgramPayload,
+  SaveWorkout,
+} from '@/lib/programSave'
+import { PLANNED_SESSION_KEY, vaultActions } from '@/components/sheets/store'
+import type { SetRow } from '@/components/sheets/store'
+import {
+  createSheetForProgram,
+  getSheetsStatus,
+  linkSheetToProgram,
+  pullProgramFromSheet,
+  pushProgramToSheet,
+  sheetUrl,
+} from '@/lib/sheetsSync'
+import ExercisePicker from './ExercisePicker'
 import { SectionHeader } from './shared'
 import { EASE } from './utils'
 
@@ -172,7 +204,7 @@ const effectiveProgramId = (c: Client, overrides: Record<string, string>) =>
 
 export default function ProgramBuilder({
   overrides,
-  onAssign,
+  onAssign: _onAssign,
   focusProgramId,
   focusNonce,
 }: {
@@ -191,7 +223,199 @@ export default function ProgramBuilder({
     null,
   )
   const [assignOpen, setAssignOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [dbPrograms, setDbPrograms] = useState<LoadedProgram[] | null>(null)
+  const [dbLoading, setDbLoading] = useState(false)
+  const [dbError, setDbError] = useState<string | null>(null)
+  const [clients, setClients] = useState<ClientSummary[]>([])
+  const [sheetBusy, setSheetBusy] = useState<string | null>(null)
+  const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
   const customCount = useRef(0)
+
+  /** Fetch the trainer's Supabase programs (incl. seeded GBC template). */
+  const loadDbPrograms = async () => {
+    setDbLoading(true)
+    setDbError(null)
+    try {
+      setDbPrograms(await loadProgramsFromSupabase())
+    } catch (e) {
+      setDbError(e instanceof Error ? e.message : 'unknown error')
+    } finally {
+      setDbLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadDbPrograms()
+    loadClientsFromSupabase()
+      .then(setClients)
+      .catch(() => setClients([]))
+    getSheetsStatus()
+      .then((s) => setSheetsConfigured(s.configured))
+      .catch(() => setSheetsConfigured(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** Patch sheet link fields on one Supabase program row (local state). */
+  const syncSheetFields = (
+    programId: string,
+    fields: { sheet_id?: string | null; sheet_synced_at?: string | null },
+  ) =>
+    setDbPrograms(
+      (prev) => prev?.map((p) => (p.id === programId ? { ...p, ...fields } : p)) ?? prev,
+    )
+
+  const sheetAction = async (p: LoadedProgram, label: string, fn: () => Promise<void>) => {
+    if (sheetBusy) return
+    setSheetBusy(p.id)
+    try {
+      await fn()
+    } catch (e) {
+      toast.error(`${label} failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+    } finally {
+      setSheetBusy(null)
+    }
+  }
+
+  const sheetCreate = (p: LoadedProgram) =>
+    sheetAction(p, 'Sheet create', async () => {
+      const email = window.prompt(
+        'Your Google email to share the new sheet with (optional — leave blank to skip):',
+      )
+      const r = await createSheetForProgram(p.id, email?.trim() || undefined)
+      syncSheetFields(p.id, { sheet_id: r.sheet_id, sheet_synced_at: r.sheet_synced_at ?? null })
+      if (r.share_warning) {
+        toast.warning(`Sheet created — ${r.sheet_url} (sharing failed: ${r.share_warning})`)
+      } else {
+        toast.success(`Google Sheet created — ${r.sheet_url}`)
+      }
+    })
+
+  const sheetLink = (p: LoadedProgram) =>
+    sheetAction(p, 'Sheet link', async () => {
+      const ref = window.prompt('Paste the Google Sheet URL or spreadsheet ID:')
+      if (!ref?.trim()) return
+      const r = await linkSheetToProgram(p.id, ref.trim())
+      syncSheetFields(p.id, { sheet_id: r.sheet_id })
+      toast.success(`Linked to Google Sheet — ${r.sheet_url}`)
+    })
+
+  const sheetPush = (p: LoadedProgram) =>
+    sheetAction(p, 'Push to Sheets', async () => {
+      const r = await pushProgramToSheet(p.id)
+      syncSheetFields(p.id, { sheet_id: r.sheet_id, sheet_synced_at: r.sheet_synced_at ?? null })
+      toast.success(`Pushed "${p.name}" to Google Sheets — ${r.sheet_url}`)
+    })
+
+  const sheetPull = (p: LoadedProgram) =>
+    sheetAction(p, 'Import from Sheets', async () => {
+      const r = await pullProgramFromSheet(p.id)
+      syncSheetFields(p.id, { sheet_synced_at: r.sheet_synced_at ?? null })
+      await loadDbPrograms()
+      toast.success(
+        `Imported ${r.workouts_imported} sessions · ${r.exercises_imported} exercises from Sheets — click Load to refresh the editor`,
+      )
+    })
+
+
+  /** Project a program's first session into the shared Today's Plan store. */
+  const projectToTodaysPlan = (p: LoadedProgram): string | null => {
+    const w = p.workouts.find((x) => x.exercises.length > 0)
+    if (!w) return null
+    const rows: SetRow[] = []
+    let seq = 0
+    for (const e of w.exercises) {
+      const sets = Math.min(Math.max(e.sets ?? 3, 1), 12)
+      for (let s = 1; s <= sets; s++) {
+        rows.push({
+          id: `${PLANNED_SESSION_KEY}-asg-${++seq}`,
+          exercise: e.name,
+          set: s,
+          reps: parseInt(e.reps ?? '', 10) || 0,
+          kg: 0,
+          rpe: 0,
+          done: false,
+        })
+      }
+    }
+    vaultActions.setSessionRows(PLANNED_SESSION_KEY, rows)
+    return w.name
+  }
+
+  /** Assign/unassign a Supabase program to a real client row. */
+  const toggleAssign = async (client: ClientSummary) => {
+    const prog = dbPrograms?.find((p) => `db-${p.id}` === selectedId)
+    if (!prog) return
+    const next = prog.client_id === client.id ? null : client.id
+    try {
+      await assignProgramToClient(prog.id, next)
+      setDbPrograms((prev) =>
+        prev?.map((p) =>
+          p.id === prog.id ? { ...p, client_id: next, client_name: next ? client.full_name : null } : p,
+        ) ?? prev,
+      )
+      if (next) {
+        const sessionName = projectToTodaysPlan(prog)
+        toast.success(
+          `Assigned to ${client.full_name}${
+            sessionName ? ` — "${sessionName}" is now in their Today's Plan` : ''
+          }`,
+        )
+      } else {
+        toast.success(`Unassigned ${client.full_name}`)
+      }
+    } catch (e) {
+      toast.error(`Assign failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+    }
+  }
+
+  /** Convert a Supabase program into an editable builder draft. */
+  const loadDbProgram = (p: LoadedProgram) => {
+    const id = `db-${p.id}`
+    const weeksCount = Math.min(Math.max(p.duration_weeks ?? 4, 1), 16)
+    const templates: Session[] = p.workouts.map((w) => ({
+      id: nextId('sess'),
+      title: w.name,
+      exercises: [...w.exercises]
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+        .map((e) => ({
+          id: nextId('ex'),
+          exercise: e.name,
+          sets: e.sets ?? 3,
+          reps: parseInt(e.reps ?? '', 10) || 0,
+          kg: 0,
+          rpe: 7,
+        })),
+    }))
+    const cloneForWeek = (): Week => ({
+      id: nextId('wk'),
+      days: DAY_LABELS.map((label, d) => ({
+        id: nextId('day'),
+        label,
+        sessions: templates
+          .map((s, i) => ({ s, i }))
+          .filter(({ i }) => i % DAY_LABELS.length === d)
+          .map(({ s }) => ({
+            ...s,
+            id: nextId('sess'),
+            exercises: s.exercises.map((e) => ({ ...e, id: nextId('ex') })),
+          })),
+      })),
+    })
+    const draft: ProgramDraft = {
+      id,
+      name: p.name,
+      subtitle: `${weeksCount} wk · from Supabase`,
+      custom: true,
+      weeks: Array.from({ length: weeksCount }, cloneForWeek),
+    }
+    setDrafts((prev) => ({ ...prev, [id]: draft }))
+    setOrder((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    setSelectedId(id)
+    setSel(null)
+    setAssignOpen(false)
+    toast.success(`Loaded "${p.name}" — edits write back on Save`)
+  }
 
   useEffect(() => {
     if (focusProgramId && drafts[focusProgramId]) {
@@ -335,9 +559,66 @@ export default function ProgramBuilder({
     setSel(null)
   }
 
-  const save = () => {
-    const n = assignedCount(selectedId)
-    toast.success(`Program updated — ${n} client${n === 1 ? '' : 's'} notified`)
+  /**
+   * Map the calendar-style draft onto the Supabase template shape: week 1's
+   * sessions become the session templates (workouts), later weeks are the
+   * same sessions progressed — the DB stores one template per session title.
+   */
+  const buildPayload = (d: ProgramDraft): SaveProgramPayload => {
+    const week1 = d.weeks[0]
+    const seen = new Set<string>()
+    const workouts: SaveWorkout[] = []
+    week1.days.forEach((day) =>
+      day.sessions.forEach((sess) => {
+        if (seen.has(sess.title)) return
+        seen.add(sess.title)
+        workouts.push({
+          name: sess.title,
+          notes: null,
+          exercises: sess.exercises.map((x, i) => ({
+            name: x.exercise,
+            sets: x.sets || null,
+            reps: String(x.reps),
+            rest_seconds: null,
+            order_index: i + 1,
+            notes: null,
+          })),
+        })
+      }),
+    )
+    return {
+      name: d.name,
+      duration_weeks: d.weeks.length,
+      frequency_per_week: week1.days.filter((day) => day.sessions.length > 0).length,
+      workouts,
+    }
+  }
+
+  const save = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await saveProgramToSupabase(buildPayload(draft))
+      toast.success(
+        `Saved to Supabase — ${res.workouts_created} workouts · ${res.exercises_created} exercises${res.replaced ? ' (replaced previous version)' : ''}`,
+      )
+    } catch (e) {
+      toast.error(`Save failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Append an exercise picked from the seeded Supabase library. */
+  const addFromLibrary = (ex: LibraryExercise) => {
+    if (!sel) return
+    updateSession(sel, (s) => ({
+      ...s,
+      exercises: [
+        ...s.exercises,
+        { id: nextId('ex'), exercise: ex.name, sets: 3, reps: 10, kg: 0, rpe: 7 },
+      ],
+    }))
   }
 
   // ---- drag & drop ---------------------------------------------------------
@@ -372,9 +653,10 @@ export default function ProgramBuilder({
           <div className="flex items-center gap-3">
             <button
               onClick={save}
-              className="inline-flex items-center gap-2 border border-white/70 px-4 py-2 text-[11px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white/10"
+              disabled={saving}
+              className="inline-flex items-center gap-2 border border-white/70 px-4 py-2 text-[11px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white/10 disabled:opacity-50"
             >
-              <Save className="h-3.5 w-3.5" /> Save changes
+              <Save className="h-3.5 w-3.5" /> {saving ? 'Saving…' : 'Save changes'}
             </button>
             <button
               onClick={addProgram}
@@ -393,6 +675,7 @@ export default function ProgramBuilder({
             {order.map((pid) => {
               const d = drafts[pid]
               const active = pid === selectedId
+              const isDb = pid.startsWith('db-')
               return (
                 <button
                   key={pid}
@@ -423,12 +706,145 @@ export default function ProgramBuilder({
                       </span>
                     </span>
                     <span className="tnum shrink-0 border border-vault-border px-1.5 py-0.5 text-[10px] text-vault-muted">
-                      {assignedCount(pid)}
+                      {isDb ? 'DB' : assignedCount(pid)}
                     </span>
                   </span>
                 </button>
               )
             })}
+          </div>
+
+          {/* Supabase programs */}
+          <div className="mt-4 border border-vault-border">
+            <div className="flex items-center justify-between border-b border-vault-border px-3 py-2">
+              <span className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+                <Database className="h-3 w-3" />
+                Supabase programs
+              </span>
+              <button
+                onClick={loadDbPrograms}
+                aria-label="Refresh Supabase programs"
+                className="text-vault-faint transition-colors hover:text-white"
+              >
+                <RefreshCw className={`h-3 w-3 ${dbLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <div className="p-2">
+              {sheetsConfigured === false && (
+                <p className="mb-1 border border-vault-border bg-vault-surface-2/40 px-2 py-1.5 text-[10px] leading-snug text-vault-faint">
+                  Google Sheets sync not configured — add a service-account key
+                  (GOOGLE_SERVICE_ACCOUNT_JSON) to enable create / push / import.
+                </p>
+              )}
+              {dbLoading && !dbPrograms && (
+                <p className="px-2 py-3 text-[11px] text-vault-faint">Loading…</p>
+              )}
+              {dbError && (
+                <div className="px-2 py-2">
+                  <p className="text-[11px] text-red-300">Load failed: {dbError}</p>
+                  <button
+                    onClick={loadDbPrograms}
+                    className="mt-1 text-[10px] uppercase tracking-[0.1em] text-vault-muted hover:text-white"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              {dbPrograms && dbPrograms.length === 0 && !dbLoading && (
+                <p className="px-2 py-3 text-[11px] text-vault-faint">
+                  No Supabase programs yet — build one and Save.
+                </p>
+              )}
+              {dbPrograms?.map((p) => {
+                const id = `db-${p.id}`
+                const loaded = Boolean(drafts[id])
+                const exCount = p.workouts.reduce((n, w) => n + w.exercises.length, 0)
+                const busy = sheetBusy === p.id
+                const syncedLabel = p.sheet_synced_at
+                  ? new Date(p.sheet_synced_at).toLocaleString()
+                  : null
+                return (
+                  <div
+                    key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => loadDbProgram(p)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        loadDbProgram(p)
+                      }
+                    }}
+                    className="group flex w-full cursor-pointer items-center gap-2 border border-transparent px-2 py-2 text-left transition-colors hover:border-vault-border hover:bg-vault-surface-2/60"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] text-white">{p.name}</span>
+                      <span className="tnum block text-[10px] text-vault-faint">
+                        {p.duration_weeks ?? '?'} wk · {p.workouts.length} sessions · {exCount}{' '}
+                        exercises
+                        {p.client_name ? ` · ${p.client_name}` : ''}
+                      </span>
+                    </span>
+                    {/* Google Sheets sync controls */}
+                    <span
+                      className="flex shrink-0 items-center gap-0.5 text-vault-muted"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {busy ? (
+                        <RefreshCw className="h-3 w-3 animate-spin text-vault-gold" />
+                      ) : p.sheet_id ? (
+                        <>
+                          <a
+                            href={sheetUrl(p.sheet_id)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`Open Google Sheet${syncedLabel ? ` · last sync ${syncedLabel}` : ''}`}
+                            className="p-1 transition-colors hover:text-white"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                          <button
+                            onClick={() => sheetPush(p)}
+                            title="Push program → Sheet (overwrites the sheet)"
+                            className="p-1 transition-colors hover:text-white"
+                          >
+                            <Upload className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => sheetPull(p)}
+                            title="Import from Sheet → program (overwrites the program)"
+                            className="p-1 transition-colors hover:text-white"
+                          >
+                            <Download className="h-3 w-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => sheetCreate(p)}
+                            title="Create a Google Sheet for this program"
+                            className="p-1 transition-colors hover:text-white"
+                          >
+                            <FileSpreadsheet className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => sheetLink(p)}
+                            title="Link an existing Google Sheet (URL or ID)"
+                            className="p-1 transition-colors hover:text-white"
+                          >
+                            <Link2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 text-[9px] uppercase tracking-[0.1em] text-vault-muted group-hover:text-white">
+                      <CloudDownload className="h-3 w-3" />
+                      {loaded ? 'Reload' : 'Load'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -698,11 +1114,18 @@ export default function ProgramBuilder({
                 </button>
               </div>
 
-              {/* Assign dropdown */}
+              {/* Seeded Supabase exercise library */}
+              <ExercisePicker
+                onPick={addFromLibrary}
+                pickedNames={new Set(selectedSession.exercises.map((x) => x.exercise))}
+              />
+
+              {/* Assign dropdown — real Supabase clients for DB-backed programs */}
               <div className="relative mt-5">
                 <button
                   onClick={() => setAssignOpen((v) => !v)}
-                  className="flex w-full items-center justify-between border border-white/70 px-3 py-2.5 text-[11px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white/10"
+                  disabled={!selectedId.startsWith('db-')}
+                  className="flex w-full items-center justify-between border border-white/70 px-3 py-2.5 text-[11px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Assign to client
                   <ChevronDown
@@ -718,28 +1141,42 @@ export default function ProgramBuilder({
                       transition={{ duration: 0.18 }}
                       className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto border border-vault-border bg-vault-surface-2 shadow-lg"
                     >
-                      {coachClients.map((c) => {
-                        const checked = effectiveProgramId(c, overrides) === selectedId
-                        return (
-                          <label
-                            key={c.id}
-                            className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-[12px] text-white transition-colors hover:bg-vault-surface-3"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => onAssign(c.id, checked ? null : selectedId)}
-                              className="h-3.5 w-3.5 accent-white"
-                            />
-                            <span className="flex-1 truncate">{c.name}</span>
-                            {checked && (
-                              <span className="text-[9px] uppercase tracking-[0.1em] text-vault-muted">
-                                Assigned
-                              </span>
-                            )}
-                          </label>
+                      {selectedId.startsWith('db-') ? (
+                        clients.length === 0 ? (
+                          <p className="px-3 py-2 text-[11px] text-vault-faint">
+                            No clients loaded — check the connection.
+                          </p>
+                        ) : (
+                          clients.map((c) => {
+                            const prog = dbPrograms?.find((p) => `db-${p.id}` === selectedId)
+                            const checked = prog?.client_id === c.id
+                            return (
+                              <label
+                                key={c.id}
+                                className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-[12px] text-white transition-colors hover:bg-vault-surface-3"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleAssign(c)}
+                                  className="h-3.5 w-3.5 accent-white"
+                                />
+                                <span className="flex-1 truncate">{c.full_name}</span>
+                                {checked && (
+                                  <span className="text-[9px] uppercase tracking-[0.1em] text-vault-muted">
+                                    Assigned
+                                  </span>
+                                )}
+                              </label>
+                            )
+                          })
                         )
-                      })}
+                      ) : (
+                        <p className="px-3 py-2 text-[11px] leading-relaxed text-vault-faint">
+                          Save this program to Supabase first — then you can assign it to a
+                          client here.
+                        </p>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

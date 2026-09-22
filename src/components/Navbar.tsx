@@ -89,7 +89,7 @@ export default function Navbar() {
             Contact
           </button>
           <Link
-            to="/portal/login"
+            to="/enter"
             className="hidden text-[13px] uppercase tracking-[0.12em] md:inline"
             style={{ color: 'var(--text-muted)' }}
           >
@@ -181,10 +181,10 @@ export default function Navbar() {
                   Contact
                 </button>
                 <div className="flex gap-6">
-                  <Link to="/portal/login" onClick={() => setOpen(false)} className="nav-link">
+                  <Link to="/enter" onClick={() => setOpen(false)} className="nav-link">
                     Staff
                   </Link>
-                  <Link to="/dashboard" onClick={() => setOpen(false)} className="nav-link">
+                  <Link to="/enter" onClick={() => setOpen(false)} className="nav-link">
                     Login
                   </Link>
                 </div>

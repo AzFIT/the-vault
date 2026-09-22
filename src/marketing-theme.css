@@ -199,3 +199,32 @@
 .tv2 .footer-link:hover {
   color: var(--gold);
 }
+
+/* Hero slideshow — 5s fade-to-black cycle:
+   0–2s fade in from black · 2–4s hold · 4–5s fade out to black */
+.tv2 .hero-slide-img {
+  animation: hero-slide-cycle 5s linear forwards;
+}
+@keyframes hero-slide-cycle {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tv2 .hero-slide-img {
+    animation: none;
+    opacity: 1;
+  }
+}

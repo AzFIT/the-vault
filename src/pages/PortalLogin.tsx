@@ -13,7 +13,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, KeyRound } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { STAFF_PROFILES, getProfile, signInAs } from '@/lib/staff'
 
@@ -29,24 +29,51 @@ export default function PortalLogin() {
 
   return (
     <div className="app-black tv2 grid min-h-[100dvh] bg-vault-bg text-white lg:grid-cols-2" style={{ background: '#141518' }}>
-      {/* Brand panel */}
-      <div className="flex flex-col justify-between border-b border-vault-border p-8 md:p-12 lg:border-b-0 lg:border-r">
-        <div>
+      {/* Brand panel — golden steel: brushed-metal surface, vault door seal,
+          metallic gold display heading */}
+      <div
+        className="relative flex flex-col justify-between overflow-hidden border-b border-vault-border p-8 md:p-12 lg:border-b-0 lg:border-r"
+        style={{ background: '#141518' }}
+      >
+        <div className="steel-texture pointer-events-none absolute inset-0" />
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.12) 0%, transparent 62%)' }}
+        />
+
+        <div className="relative">
           <Link to="/" aria-label="The Vault Fitness — home" className="inline-flex items-center gap-3">
             <img src={asset('brand/vault-logo-full.png')} alt="The Vault Fitness" className="h-12 w-auto" />
           </Link>
+        </div>
+
+        <div className="relative flex flex-col items-center py-10 text-center">
+          <div className="relative">
+            <div className="gold-ring pointer-events-none absolute inset-0 rounded-full" />
+            <img
+              src={asset('brand/vault-door.png')}
+              alt="The Vault door"
+              className="vault-door-spin relative w-52 md:w-64"
+              style={{ filter: 'drop-shadow(0 18px 42px rgba(0,0,0,0.6))' }}
+            />
+          </div>
           <h1
-            className="mt-10 text-3xl md:text-4xl"
-            style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--gold-light)' }}
+            className="gold-metal-text mt-9 text-3xl md:text-4xl"
+            style={{ fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.08em' }}
           >
-            Management Portal
+            MANAGEMENT PORTAL
           </h1>
           <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-vault-muted">
             Scheduling, revenue and staff performance — the studio at a glance,
             before the first coffee.
           </p>
+          <p className="mt-7 flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-vault-faint">
+            <KeyRound className="h-3.5 w-3.5 text-gold/80" />
+            Staff only · Authorized access
+          </p>
         </div>
-        <p className="mt-12 text-[11px] text-vault-faint">© 2026 The Vault Fitness · Staff only</p>
+
+        <p className="relative mt-6 text-[11px] text-vault-faint">© 2026 The Vault Fitness · Staff only</p>
       </div>
 
       {/* Sign-in panel */}

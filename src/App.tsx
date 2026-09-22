@@ -23,6 +23,8 @@ const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Intake = lazy(() => import('./pages/Intake'))
 const PortalLogin = lazy(() => import('./pages/PortalLogin'))
+const PortalGate = lazy(() => import('./pages/PortalGate'))
+const MemberLogin = lazy(() => import('./pages/MemberLogin'))
 const FrontDesk = lazy(() => import('./pages/FrontDesk'))
 const FrontDeskCheckIn = lazy(() => import('./pages/FrontDeskCheckIn'))
 const FrontDeskPOS = lazy(() => import('./pages/FrontDeskPOS'))
@@ -85,6 +87,12 @@ export default function App() {
 
       {/* Management portal — Phase A tester sign-in (no real auth yet) */}
       <Route path="/portal/login" element={page(<PortalLogin />)} />
+
+      {/* The Vault Gate — intro video + destination menu (navbar Login/Staff) */}
+      <Route path="/enter" element={page(<PortalGate />)} />
+
+      {/* Member portal — golden-steel tester sign-in, mirrors the staff portal */}
+      <Route path="/login" element={page(<MemberLogin />)} />
 
       {/* Front desk — separate front-desk surface, role-gated (tester sign-in) */}
       <Route element={<FrontDeskShell />}>

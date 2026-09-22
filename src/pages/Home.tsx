@@ -6,6 +6,8 @@ import {
   Activity,
   ArrowRight,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Crown,
   Dumbbell,
   HeartPulse,
@@ -89,6 +91,102 @@ function useCountUp(target: number) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Hero slideshow — fade-to-black crossfade, 5s per slide              */
+/*                                                                     */
+/* Timing per 5s cycle (matches the user's spec):                      */
+/*   0–2s  fade in from black (CSS 0% → 40%)                           */
+/*   2–4s  fully visible hold                                          */
+/*   4–5s  fade out to black (CSS 80% → 95%), brief black beat, next    */
+/* ------------------------------------------------------------------ */
+
+const HERO_SLIDES = [
+  { src: 'hero-slide-1.jpg', alt: 'The Vault training floor with the vault door' },
+  { src: 'hero-slide-2.jpg', alt: 'Weightlifting platform and racks at The Vault' },
+  { src: 'hero-slide-3.jpg', alt: 'Small-group class training at The Vault' },
+  { src: 'hero-slide-4.jpg', alt: 'Battle-rope conditioning session' },
+  { src: 'hero-slide-5.jpg', alt: 'Cardio and machine area at The Vault' },
+]
+
+const SLIDE_MS = 5000
+
+function HeroSlideshow() {
+  const [index, setIndex] = useState(0)
+  /** Bumped on every manual change so the CSS cycle restarts on the new slide */
+  const [nonce, setNonce] = useState(0)
+  const timer = useRef<number | null>(null)
+  const staticMode = reducedMotion()
+
+  const go = (next: number) => {
+    setIndex(((next % HERO_SLIDES.length) + HERO_SLIDES.length) % HERO_SLIDES.length)
+    setNonce((n) => n + 1)
+  }
+
+  useEffect(() => {
+    if (staticMode) return
+    timer.current = window.setTimeout(() => go(index + 1), SLIDE_MS)
+    return () => {
+      if (timer.current) window.clearTimeout(timer.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, nonce, staticMode])
+
+  if (staticMode) {
+    return (
+      <img
+        src={asset(HERO_SLIDES[0].src)}
+        alt={HERO_SLIDES[0].alt}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    )
+  }
+
+  const slide = HERO_SLIDES[index]
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-black">
+      <img
+        key={`${index}-${nonce}`}
+        src={asset(slide.src)}
+        alt={slide.alt}
+        className="hero-slide-img absolute inset-0 h-full w-full object-cover"
+      />
+
+      {/* Manual controls — arrows + clickable dots, bottom right */}
+      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Previous photo"
+          onClick={() => go(index - 1)}
+          className="flex h-8 w-8 items-center justify-center border border-white/25 bg-black/45 text-white/80 backdrop-blur-sm transition-colors hover:border-gold hover:text-gold"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-1.5 px-1">
+          {HERO_SLIDES.map((s, i) => (
+            <button
+              key={s.src}
+              type="button"
+              aria-label={`Go to photo ${i + 1}`}
+              onClick={() => go(i)}
+              className={`h-1.5 transition-all duration-300 ${
+                i === index ? 'w-5 bg-gold' : 'w-1.5 bg-white/40 hover:bg-white/75'
+              }`}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          aria-label="Next photo"
+          onClick={() => go(index + 1)}
+          className="flex h-8 w-8 items-center justify-center border border-white/25 bg-black/45 text-white/80 backdrop-blur-sm transition-colors hover:border-gold hover:text-gold"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Section 1 — Split hero (Phase 2 spec)                                */
 /* ------------------------------------------------------------------ */
 
@@ -127,13 +225,9 @@ function Hero() {
         </div>
       </div>
 
-      {/* Right — moody gym photography, fading into the black panel */}
+      {/* Right — moody gym photography slideshow, fading into the black panel */}
       <div className="relative min-h-[46vh] lg:min-h-[calc(100svh-108px)]">
-        <img
-          src={asset('hero-home.jpg')}
-          alt="Coach guiding a deadlift at The Vault Fitness"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <HeroSlideshow />
         <div className="hero-photo-fade absolute inset-0" />
       </div>
     </section>
