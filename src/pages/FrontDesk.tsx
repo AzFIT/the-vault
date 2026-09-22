@@ -36,7 +36,7 @@ import {
   salesToday,
 } from '@/lib/staff'
 import type { ShiftEventType, StaffProfile } from '@/lib/staff'
-import { QUICK_SALE_ITEMS as SALE_ITEMS, formatHKD } from '@/lib/pos'
+import { QUICK_SALE_IDS, formatHKD, useProducts } from '@/lib/pos'
 import { useKpiHidden } from '@/lib/kpiHidden'
 import KpiSheet from '@/components/KpiSheet'
 import { KPI_MASK } from '@/components/KpiSheet'
@@ -109,12 +109,18 @@ function QuickAdd({ profile, onLogged }: { profile: StaffProfile; onLogged: () =
   const [title, setTitle] = useState('')
   const [due, setDue] = useState('14:00')
 
+  const products = useProducts()
+  const saleItems = QUICK_SALE_IDS.map((id) => products.find((p) => p.id === id)).filter(
+    (p): p is NonNullable<typeof p> => Boolean(p),
+  )
+
   const close = () => setKind(null)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (kind === 'sale') {
-      const item = SALE_ITEMS[saleItem]
+      const item = saleItems[saleItem]
+      if (!item) return
       recordEvent(profile.id, 'sale', `Sale — ${item.label} ${formatHKD(item.price)}`)
     } else if (kind === 'call') {
       if (!who.trim()) return
@@ -174,7 +180,7 @@ function QuickAdd({ profile, onLogged }: { profile: StaffProfile; onLogged: () =
                 <label className="min-w-[200px] flex-1">
                   <span className="mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-vault-muted">Item</span>
                   <select value={saleItem} onChange={(e) => setSaleItem(Number(e.target.value))} className={selectCls}>
-                    {SALE_ITEMS.map((s, i) => (
+                    {saleItems.map((s, i) => (
                       <option key={s.label} value={i}>
                         {s.label} — {formatHKD(s.price)}
                       </option>

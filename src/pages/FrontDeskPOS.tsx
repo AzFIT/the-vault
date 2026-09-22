@@ -8,10 +8,10 @@
 import { useMemo, useState } from 'react'
 import { Check, Minus, Plus, Receipt, Trash2 } from 'lucide-react'
 import {
-  PRODUCTS,
   cartTotal,
   formatHKD,
   recordSale,
+  useProducts,
 } from '@/lib/pos'
 import type { CartLine, PaymentMethod } from '@/lib/pos'
 import { getCurrentProfile, listTodayEvents, salesToday } from '@/lib/staff'
@@ -22,6 +22,7 @@ const METHODS: PaymentMethod[] = ['Cash', 'Card', 'FPS']
 
 export default function FrontDeskPOS() {
   const profile = getCurrentProfile()
+  const products = useProducts()
   const [cart, setCart] = useState<CartLine[]>([])
   const [method, setMethod] = useState<PaymentMethod>('Card')
   const [customer, setCustomer] = useState('')
@@ -51,7 +52,7 @@ export default function FrontDeskPOS() {
     setCart((cur) => {
       const line = cur.find((l) => l.product.id === id)
       if (line) return cur.map((l) => (l.product.id === id ? { ...l, qty: l.qty + 1 } : l))
-      const product = PRODUCTS.find((p) => p.id === id)
+      const product = products.find((p) => p.id === id)
       return product ? [...cur, { product, qty: 1 }] : cur
     })
   }
@@ -90,7 +91,7 @@ export default function FrontDeskPOS() {
             <section key={cat} className="app-card p-5" aria-label={cat}>
               <h3 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-vault-muted">{cat}</h3>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {PRODUCTS.filter((p) => p.category === cat).map((p) => (
+                {products.filter((p) => p.category === cat).map((p) => (
                   <button
                     key={p.id}
                     type="button"

@@ -1,41 +1,34 @@
 /**
- * POS data layer — product catalog, cart math, and sale logging for the
- * front-desk point of sale (/portal/pos). Completing a sale writes one
- * 'sale' event per transaction (label carries the HK$ total so the My
- * shift KPI can sum it) plus a 'stock' event for every merch item sold —
- * all auto-tagged to the signed-in staff ID via the shared shift log.
+ * POS data layer — cart math and sale logging for the front-desk point of
+ * sale (/portal/pos). The product catalog itself lives in posCatalog.ts
+ * (owner-editable, localStorage-backed); useProducts() here is the till-side
+ * view: active (non-archived) products, live across tabs.
+ *
+ * Completing a sale writes one 'sale' event per transaction (label carries
+ * the HK$ total so the My shift KPI can sum it) plus a 'stock' event for
+ * every merch item sold — all auto-tagged to the signed-in staff ID via the
+ * shared shift log.
  */
+import { useMemo } from 'react'
+import { usePosCatalog } from '@/lib/posCatalog'
+import type { Product } from '@/lib/posCatalog'
 import { recordEvent } from '@/lib/staff'
 
-export interface Product {
-  id: string
-  label: string
-  price: number
-  category: 'Passes' | 'Memberships' | 'PT packs' | 'Merch'
-  /** merch items log a stock adjustment on sale */
-  stock?: boolean
+export type { Product } from '@/lib/posCatalog'
+export type { ProductCategory } from '@/lib/posCatalog'
+
+/**
+ * Catalog IDs surfaced in the My shift quick-add, in display order. Resolved
+ * against the live catalog so owner edits/archives are honoured; unknown IDs
+ * are skipped.
+ */
+export const QUICK_SALE_IDS = ['day-pass', 'class-pack-10', 'pt-3-pack', 'merch-tee']
+
+/** Active products (archived excluded), live from the catalog store. */
+export function useProducts(): Product[] {
+  const [catalog] = usePosCatalog()
+  return useMemo(() => catalog.filter((p) => !p.archived), [catalog])
 }
-
-export const PRODUCTS: Product[] = [
-  { id: 'day-pass', label: 'Day pass', price: 180, category: 'Passes' },
-  { id: 'class-dropin', label: 'Class drop-in', price: 120, category: 'Passes' },
-  { id: 'trial-class', label: 'Trial class', price: 0, category: 'Passes' },
-  { id: 'class-pack-10', label: 'Class pack 10', price: 1500, category: 'Memberships' },
-  { id: 'open-gym-monthly', label: 'Open gym — monthly', price: 980, category: 'Memberships' },
-  { id: 'pt-3-pack', label: 'PT 3-pack', price: 2100, category: 'PT packs' },
-  { id: 'pt-12-pack', label: 'PT 12-pack', price: 7500, category: 'PT packs' },
-  { id: 'merch-tee', label: 'Merch — tee', price: 280, category: 'Merch', stock: true },
-  { id: 'protein-bar', label: 'Protein bar', price: 45, category: 'Merch', stock: true },
-  { id: 'vault-shaker', label: 'Vault shaker', price: 160, category: 'Merch', stock: true },
-]
-
-/** Subset surfaced in the My shift quick-add. */
-export const QUICK_SALE_ITEMS: Product[] = [
-  PRODUCTS[0],
-  PRODUCTS[3],
-  PRODUCTS[5],
-  PRODUCTS[7],
-]
 
 export interface CartLine {
   product: Product

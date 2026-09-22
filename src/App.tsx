@@ -19,6 +19,7 @@ const PortalSchedule = lazy(() => import('./pages/PortalSchedule'))
 const PortalInsights = lazy(() => import('./pages/PortalInsights'))
 const PortalInsightsReport = lazy(() => import('./pages/PortalInsightsReport'))
 const PortalSettings = lazy(() => import('./pages/PortalSettings'))
+const PortalServices = lazy(() => import('./pages/PortalServices'))
 const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -72,6 +73,7 @@ export default function App() {
         <Route path="/portal/schedule" element={page(<PortalSchedule />)} />
         <Route path="/portal/insights" element={page(<PortalInsights />)} />
         <Route path="/portal/settings" element={page(<PortalSettings />)} />
+        <Route path="/portal/services" element={page(<PortalServices />)} />
       </Route>
 
       {/* Retired management view — graduated into the owner portal */}
