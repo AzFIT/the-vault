@@ -18,6 +18,7 @@
 
     /* Official brand gold (accent only — never large fills) */
     --vault-gold: #d4af37;
+    --vault-gold-rgb: 212 175 55;
     --vault-gold-bright: #e9c767;
     --vault-gold-dim: #8a7427;
 
@@ -77,6 +78,7 @@
     --viz-track: #1a1a1a;
     /* Gold accents carry over identically onto the black canvas */
     --vault-gold: #d4af37;
+    --vault-gold-rgb: 212 175 55;
     --vault-gold-bright: #e9c767;
     --vault-gold-dim: #8a7427;
   }

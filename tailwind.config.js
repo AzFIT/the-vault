@@ -10,7 +10,10 @@ module.exports = {
       },
       colors: {
         gold: {
-          DEFAULT: "var(--vault-gold)",
+          // RGB triplet + <alpha-value> so opacity modifiers (bg-gold/90,
+          // border-gold/50, …) actually generate — var(--vault-gold) alone
+          // silently drops the alpha in Tailwind v3.
+          DEFAULT: "rgb(var(--vault-gold-rgb) / <alpha-value>)",
           bright: "var(--vault-gold-bright)",
           dim: "var(--vault-gold-dim)",
         },

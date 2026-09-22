@@ -2,8 +2,8 @@
  * Schedule — the studio week grid (wireframe screen 04, Pike13 layout),
  * mounted at /portal/schedule (owner) and /portal/desk-schedule (front
  * desk); each shell guards its own role. Colour-coded blocks: gold =
- * revenue-bearing PT 1:1/2:1, white = group class with capacity, dashed =
- * bookable open room slot. Week/day toggle, ‹ › week navigation, legend
+ * PT 1:1, maroon = PT 2:1, hairline outline = group class with capacity,
+ * dashed = bookable open room slot. Week/day toggle, ‹ › week navigation, legend
  * filters, click any empty time slot to create a block at that day + time,
  * and a click-to-edit drawer (type-first: class blocks pick from class
  * templates). Edits persist to localStorage; drag-to-move is a later phase.
@@ -36,10 +36,16 @@ const GRID_HEIGHT = (GRID_END_MIN - GRID_START_MIN) * PX_PER_MIN
 const HOURS: number[] = []
 for (let m = GRID_START_MIN; m < GRID_END_MIN; m += 60) HOURS.push(m)
 
-function blockCls(type: BlockType) {
-  switch (type) {
+function isDuo(b: ScheduleBlock) {
+  return b.type === 'pt' && /2\s*:\s*1/.test(b.title)
+}
+
+function blockCls(b: ScheduleBlock) {
+  switch (b.type) {
     case 'pt':
-      return 'border-gold bg-gold/90 hover:brightness-110'
+      return isDuo(b)
+        ? 'border-[#7a2e2e] bg-[#7a2e2e] hover:brightness-125'
+        : 'border-gold bg-gold/90 hover:brightness-110'
     case 'class':
       return 'border-[rgba(212,175,55,0.25)] bg-gold/[0.06]'
     case 'open':
@@ -47,8 +53,20 @@ function blockCls(type: BlockType) {
   }
 }
 
-function blockTitleCls(type: BlockType) {
-  return type === 'pt' ? 'text-black' : type === 'class' ? 'text-white' : 'text-vault-muted'
+function blockTitleCls(b: ScheduleBlock) {
+  if (b.type === 'pt') return isDuo(b) ? 'text-[#f0d8d8]' : 'text-black'
+  return b.type === 'class' ? 'text-white' : 'text-vault-muted'
+}
+
+/** Sub-line colour — dark on filled blocks, muted on outlined/empty ones. */
+function blockSubCls(b: ScheduleBlock) {
+  if (b.type === 'pt') return isDuo(b) ? 'text-[#f0d8d8]/80' : 'text-black/80'
+  return b.type === 'class' ? 'text-vault-muted' : 'text-vault-faint'
+}
+
+function blockNoteCls(b: ScheduleBlock) {
+  if (b.type === 'pt') return isDuo(b) ? 'text-[#f0d8d8]/60' : 'text-black/60'
+  return 'text-vault-faint'
 }
 
 function blockSub(block: ScheduleBlock): string {
@@ -175,7 +193,7 @@ export default function PortalSchedule() {
           <p className="eyebrow">Operate · Schedule</p>
           <h2 className="mt-1 text-2xl font-bold text-white">Schedule</h2>
           <p className="mt-1 text-[13px] text-vault-muted">
-            Gold = revenue-bearing 1:1/2:1 · outlined = group class · dashed gold = bookable open slot.
+            Gold = 1:1 · maroon = 2:1 · outlined = group class · dashed gold = bookable open slot.
           </p>
         </div>
         <button
@@ -251,7 +269,7 @@ export default function PortalSchedule() {
             >
               <span
                 className={`h-2.5 w-2.5 ${
-                  t === 'pt' ? 'border border-gold bg-gold/30' : t === 'class' ? 'border border-[rgba(216,216,220,0.45)]' : 'border border-dashed border-gold/50'
+                  t === 'pt' ? 'border border-gold bg-gold' : t === 'class' ? 'border border-[rgba(216,216,220,0.45)]' : 'border border-dashed border-gold/50'
                 }`}
               />
               {BLOCK_TYPE_LABELS[t]}
@@ -311,19 +329,19 @@ export default function PortalSchedule() {
                         e.stopPropagation()
                         openDrawer(b)
                       }}
-                      className={`absolute left-1 right-1 cursor-pointer overflow-hidden border px-2 py-1 text-left transition-colors hover:brightness-125 ${blockCls(b.type)}`}
+                      className={`absolute left-1 right-1 cursor-pointer overflow-hidden border px-2 py-1 text-left transition-colors hover:brightness-125 ${blockCls(b)}`}
                       style={{
                         top: Math.max(0, (b.startMin - GRID_START_MIN) * PX_PER_MIN),
                         height: Math.max(28, b.durationMin * PX_PER_MIN - 3),
                       }}
                     >
-                      <p className={`truncate text-[12px] font-semibold leading-tight ${blockTitleCls(b.type)}`}>
+                      <p className={`truncate text-[12px] font-semibold leading-tight ${blockTitleCls(b)}`}>
                         {b.title}
                       </p>
-                      <p className="tnum mt-0.5 truncate text-[10px] leading-tight text-vault-muted">
+                      <p className={`tnum mt-0.5 truncate text-[10px] leading-tight ${blockSubCls(b)}`}>
                         {blockSub(b)}
                       </p>
-                      {b.note && <p className="truncate text-[10px] leading-tight text-vault-faint">{b.note}</p>}
+                      {b.note && <p className={`truncate text-[10px] leading-tight ${blockNoteCls(b)}`}>{b.note}</p>}
                     </button>
                   ))}
                 </div>
@@ -336,8 +354,9 @@ export default function PortalSchedule() {
       {/* Legends */}
       <div className="flex flex-wrap gap-x-8 gap-y-2 text-[11px] text-vault-faint">
         <p>
-          <span className="text-vault-muted">Colour coding</span> — solid gold blocks are revenue-bearing
-          1:1/2:1 sessions, hairline-outlined blocks are group classes, dashed gold blocks are bookable open slots.
+          <span className="text-vault-muted">Colour coding</span> — solid gold blocks are 1:1 sessions,
+          solid maroon blocks are 2:1 sessions, hairline-outlined blocks are group classes, dashed gold
+          blocks are bookable open slots.
         </p>
         <p>
           <span className="text-vault-muted">Grid click</span> — click any empty time slot to create a

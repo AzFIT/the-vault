@@ -99,7 +99,7 @@ const SEED_SPECS: SeedSpec[] = [
   { day: 1, type: 'pt', title: 'Marcus Lau 1:1', startMin: 7 * 60, durationMin: 60, room: 'VIP', coach: 'Dan' },
   { day: 1, type: 'class', title: 'Strength Class', startMin: 8 * 60, durationMin: 60, room: 'Main', capacity: 6, enrolled: 5 },
   { day: 1, type: 'class', title: 'FITMAMA Strength', startMin: 12 * 60 + 15, durationMin: 60, room: 'Main', capacity: 6, enrolled: 4 },
-  { day: 1, type: 'pt', title: 'Priya 1:1', startMin: 18 * 60, durationMin: 60, room: 'Main', coach: 'Ziggy' },
+  { day: 1, type: 'pt', title: 'Priya 1:1', startMin: 17 * 60, durationMin: 60, room: 'Main', coach: 'Ziggy' },
   { day: 1, type: 'class', title: 'Hyrox Class', startMin: 18 * 60 + 30, durationMin: 60, room: 'Main', capacity: 6, enrolled: 6 },
   // Wed
   { day: 2, type: 'class', title: 'Strength Class', startMin: 8 * 60, durationMin: 60, room: 'Main', capacity: 6, enrolled: 6 },
