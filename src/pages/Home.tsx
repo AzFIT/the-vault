@@ -276,7 +276,7 @@ function ClassStrip() {
           {CLASSES.map(({ name, chip, chipLabel, Icon }, i) => (
             <Rise key={name} delay={i * 90} className="w-[70vw] shrink-0 snap-start lg:w-auto">
               <Link
-                to="/dashboard"
+                to="/intake?mode=trial"
                 className="card group flex h-full flex-col gap-5 transition-colors duration-300 hover:!border-[rgba(212,175,55,0.4)]"
               >
                 <div className="flex items-center justify-between">
@@ -447,7 +447,7 @@ function ProgressChart() {
               <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
                 Illustrative progression — members track real numbers in the app.
               </p>
-              <Link to="/dashboard" className="btn-outline !px-5 !py-2.5">
+              <Link to="/intake?mode=trial" className="btn-outline !px-5 !py-2.5">
                 Start Tracking
               </Link>
             </div>
@@ -571,7 +571,7 @@ function VipStudio() {
               training sessions with one of our qualified coaches.
             </p>
             <div className="mt-9">
-              <Link to="/dashboard" className="btn-gold">
+              <Link to="/intake?mode=training" className="btn-gold">
                 Book a Personal Trainer
               </Link>
             </div>
@@ -728,7 +728,7 @@ function GroupClasses() {
                 <h3 className="h-display text-lg">{c.name}</h3>
                 <p className="mt-3 text-[14px] leading-[1.7]" style={{ color: 'var(--text-secondary)' }}>{c.body}</p>
                 <Link
-                  to="/dashboard"
+                  to="/intake?mode=trial"
                   className="group mt-5 inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.1em]"
                   style={{ color: 'var(--gold)' }}
                 >
@@ -776,7 +776,7 @@ function WomensHealth() {
               <button type="button" className="btn-gold" onClick={() => scrollToId('group-classes')}>
                 Classes
               </button>
-              <Link to="/dashboard" className="btn-outline">
+              <Link to="/intake?mode=training" className="btn-outline">
                 Programme
               </Link>
             </div>
@@ -1038,7 +1038,7 @@ function FinalCta() {
             No contract. No joining fees. Cancel anytime.
           </p>
           <div className="mt-10 flex flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-center">
-            <Link to="/dashboard" className="btn-gold">
+            <Link to="/intake?mode=trial" className="btn-gold">
               Start Training
             </Link>
             <button type="button" className="btn-outline" onClick={() => scrollToId('memberships')}>
