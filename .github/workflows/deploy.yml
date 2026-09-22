@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths-ignore:
       - 'docs/**'
+  # Manual retry entry point — see "Run workflow" on the Actions tab.
+  workflow_dispatch:
 
 permissions:
   contents: write
