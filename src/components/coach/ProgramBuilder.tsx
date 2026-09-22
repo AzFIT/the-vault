@@ -47,6 +47,7 @@ import {
   sheetUrl,
 } from '@/lib/sheetsSync'
 import ExercisePicker from './ExercisePicker'
+import TemplateSyncCard from './TemplateSyncCard'
 import { SectionHeader } from './shared'
 import { EASE } from './utils'
 
@@ -846,6 +847,9 @@ export default function ProgramBuilder({
               })}
             </div>
           </div>
+
+          {/* Shared tracking-template sync (one Google Sheet for the whole template) */}
+          <TemplateSyncCard />
         </div>
 
         {/* Week editor */}
