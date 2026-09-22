@@ -26,6 +26,10 @@
   --vault-btn-text: #000000;
   --vault-btn-hover: #e8c766;
 
+  /* Primary data viz series: pure white -> gold (rings, line/bar charts) */
+  --viz-1: #d4af37;
+  --viz-track: rgba(212, 175, 55, 0.12);
+
   /* shadcn HSL ramp (cards/popovers/inputs used by portal components) */
   --background: 240 7% 5%;
   --foreground: 240 4% 86%;

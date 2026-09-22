@@ -70,16 +70,19 @@ export default function Coach() {
         <div className="flex items-center gap-4">
           <div
             aria-label="Dan Kan"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-vault-border bg-vault-surface"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-gold/10"
           >
-            <span className="font-serif text-lg text-vault-muted">DK</span>
+            <span className="font-serif text-lg text-gold">DK</span>
           </div>
           <div>
-            <p className="eyebrow">Coach Dashboard</p>
-            <h2 className="mt-1 text-2xl font-bold text-white md:text-3xl">
+            <p className="section-head">Trainer portal</p>
+            <h2
+              className="h-display mt-2 text-2xl md:text-3xl"
+              style={{ color: 'var(--gold)' }}
+            >
               Good morning, Dan
             </h2>
-            <p className="mt-0.5 text-[13px] text-vault-muted">
+            <p className="mt-1 text-[13px] text-vault-muted">
               {dan?.role} · Sheung Wan
             </p>
           </div>
@@ -113,7 +116,7 @@ export default function Coach() {
               setFilter('AT RISK')
               scrollToId('coach-roster')
             }}
-            className="flex w-full items-center justify-between gap-3 border border-dashed border-viz-3 px-5 py-3.5 text-left transition-colors hover:bg-vault-surface-2"
+            className="flex w-full items-center justify-between gap-3 border border-dashed border-[#7a2e2e] bg-[#7a2e2e]/[0.06] px-5 py-3.5 text-left transition-colors hover:bg-vault-surface-2"
           >
             <span className="text-[13px] text-white">
               <span className="tnum font-bold">{atRisk.length}</span> client

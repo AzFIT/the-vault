@@ -201,7 +201,7 @@ export default function KpiRow() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {cards.map((card, i) => {
           const hidden = card.privacyKey ? privacy[card.privacyKey] && !revealed[card.privacyKey] : false
           return (
@@ -216,7 +216,7 @@ export default function KpiRow() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') goTo(card.target)
               }}
-              className="app-card cursor-pointer p-6 transition-colors hover:border-white/40"
+              className="app-card cursor-pointer p-4 transition-colors hover:border-white/40 sm:p-6"
             >
               <div className="flex items-center justify-between">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-vault-muted">
@@ -229,8 +229,8 @@ export default function KpiRow() {
               <span
                 className={
                   hidden
-                    ? 'tnum mt-3 block select-none text-[32px] font-bold leading-none text-white blur-[7px] md:text-[38px]'
-                    : 'tnum mt-3 block text-[32px] font-bold leading-none text-white md:text-[38px]'
+                    ? 'tnum mt-3 block select-none text-[24px] font-bold leading-none text-gold blur-[6px] sm:text-[32px] sm:blur-[7px] md:text-[38px]'
+                    : 'tnum mt-3 block text-[24px] font-bold leading-none text-gold sm:text-[32px] md:text-[38px]'
                 }
                 aria-hidden={hidden}
               >

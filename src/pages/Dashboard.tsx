@@ -123,7 +123,7 @@ export default function Dashboard() {
       <GreetingStrip />
 
       {/* Section 2 — progress rings (hero of the page) */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {rings.map((r, i) => (
           <RingCard key={r.label} {...r} delay={0.1 + i * 0.15} />
         ))}

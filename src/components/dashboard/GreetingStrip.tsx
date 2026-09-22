@@ -28,12 +28,13 @@ export default function GreetingStrip() {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p className="eyebrow">{formatDateLong(today.date)} · {demoClient.location.toUpperCase()}</p>
+        <p className="section-head">Welcome back · {formatDateLong(today.date)}</p>
         <motion.h1
           variants={container}
           initial="hidden"
           animate="show"
-          className="mt-2 text-[34px] font-bold leading-tight"
+          className="h-display mt-2 text-[34px] leading-tight"
+          style={{ color: 'var(--gold)' }}
         >
           {`Good morning, ${firstName}`.split(' ').map((w, i) => (
             <motion.span key={i} variants={word} className="inline-block">
@@ -43,8 +44,8 @@ export default function GreetingStrip() {
           ))}
         </motion.h1>
         <p className="mt-2 text-[15px] text-vault-muted">
-          Week {LOG_WEEKS} of {program?.name} · {sessionsThisWeek} sessions this week · Coach:{' '}
-          {coach?.name}
+          Let's crush this week — Week {LOG_WEEKS} of {program?.name} · {sessionsThisWeek} sessions in · Coach:{' '}
+          {coach?.name} · {demoClient.location}
         </p>
       </div>
 

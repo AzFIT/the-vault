@@ -50,7 +50,7 @@ const NOTIFICATIONS = [
 function navLinkCls(isActive: boolean) {
   return `relative flex items-center gap-3 px-3 py-2.5 text-[13px] uppercase tracking-[0.08em] transition-colors ${
     isActive
-      ? 'bg-white/[0.08] text-white'
+      ? 'bg-gold/10 text-gold'
       : 'text-vault-muted hover:bg-white/[0.04] hover:text-white'
   }`
 }
@@ -81,8 +81,8 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className={`flex h-16 items-center gap-3 border-b border-vault-border px-5 ${collapsed ? 'justify-center px-0' : ''}`}>
-        <img src={asset('brand/vault-logo-mark.png')} alt="The Vault" className="h-9 w-auto object-contain" />
-        {!collapsed && <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>}
+        <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="The Vault" className="h-8 w-auto shrink-0 object-contain" />
+        {!collapsed && <span className="brand-logo__wordmark !text-[11px]">The Vault Fitness</span>}
       </div>
 
       {/* Nav */}
@@ -199,16 +199,16 @@ function SidebarContent({
           {isCoachView ? (
             <div
               aria-label="Dan Kan"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-gold/10"
             >
-              <span className="font-serif text-xs text-vault-muted">DK</span>
+              <span className="font-serif text-xs text-gold">DK</span>
             </div>
           ) : (
             <div
               aria-label="Rachel Cheung"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-gold/10"
             >
-              <span className="font-serif text-xs text-vault-muted">RC</span>
+              <span className="font-serif text-xs text-gold">RC</span>
             </div>
           )}
           {!collapsed && (
@@ -502,7 +502,7 @@ export default function AppShell() {
     })
 
   return (
-    <div className="app-black min-h-[100dvh] bg-vault-bg text-white">
+    <div className="app-black tv2 min-h-[100dvh] bg-vault-bg text-white">
       {/* Sidebar — desktop, collapsible */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 hidden border-r border-vault-border bg-vault-surface transition-[width] duration-200 lg:block ${
@@ -551,7 +551,7 @@ export default function AppShell() {
             aria-label="The Vault Fitness — home"
             className="absolute left-1/2 hidden -translate-x-1/2 md:block"
           >
-            <img src={asset('brand/vault-logo-mark.png')} alt="" className="h-8 w-auto object-contain" />
+            <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="" className="h-8 w-auto object-contain" />
           </Link>
           <div className="flex items-center gap-3">
             <button
@@ -626,7 +626,7 @@ export default function AppShell() {
           style: {
             background: 'var(--vault-surface-2)',
             border: '1px solid var(--vault-border)',
-            color: '#fff',
+            color: 'var(--vault-ink)',
             borderRadius: 0,
           },
         }}
