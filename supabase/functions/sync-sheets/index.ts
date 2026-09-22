@@ -159,7 +159,7 @@ async function gfetch(token: string, path: string, init?: RequestInit): Promise<
     const msg =
       (data.error as { message?: string } | undefined)?.message ??
       JSON.stringify(data).slice(0, 200)
-    throw new Error(`Google Sheets API ${res.status}: ${msg}`)
+    throw new Error(`Google Sheets API ${res.status} on ${path.slice(0, 120)}: ${msg}`)
   }
   return data as Record<string, unknown>
 }
@@ -419,6 +419,470 @@ function parseTab(title: string, values: string[][] | undefined): SheetWorkout |
 }
 
 // ---------------------------------------------------------------------------
+// Template mode — two-way sync with the trainer master workbook
+//
+// Tab layout (banner rows are preserved; column A is always empty):
+//   CLIENTS:      header row 4, data rows 5+,   cols B..L
+//   MEASUREMENTS: header row 7, data rows 8+,   cols B..M
+//   WORKOUT LOG:  header row 7, data rows 8+,   cols B..N
+// Dates are `dd Mmm yyyy` (e.g. "20 Jul 2026"). Conflict model: last-write-wins
+// per direction, stamped via the template_synced_at sync_config key.
+// ---------------------------------------------------------------------------
+
+type SB = ReturnType<typeof createClient>
+
+const TEMPLATE_TABS = {
+  CLIENTS: { headerRow: 4, dataStart: 5, lastCol: 'L' },
+  MEASUREMENTS: { headerRow: 7, dataStart: 8, lastCol: 'M' },
+  'WORKOUT LOG': { headerRow: 7, dataStart: 8, lastCol: 'N' },
+} as const
+type TemplateTab = keyof typeof TEMPLATE_TABS
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "20 Jul 2026" -> ISO UTC midnight. Returns null when unparseable. */
+function parseSheetDate(v: string): string | null {
+  const m = v.trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/)
+  if (!m) return null
+  const mon = MONTHS.findIndex(
+    (x) => x.toLowerCase() === m[2].slice(0, 3).toLowerCase(),
+  )
+  if (mon === -1) return null
+  return new Date(Date.UTC(Number(m[3]), mon, Number(m[1]))).toISOString()
+}
+
+/** ISO -> "20 Jul 2026" (UTC components, matching the template's date style). */
+function fmtSheetDate(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
+/** Lenient number parse — tolerates "80 kg", "12.5", blanks. */
+function num(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  const n = parseFloat(String(v).replace(/[^\d.-]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
+function str(v: unknown): string {
+  return (v ?? '').toString().trim()
+}
+
+/** Sheet values like "Male"/"F" -> the DB check constraint's lowercase vocabulary. */
+function normGender(v: unknown): string | null {
+  const g = str(v).toLowerCase()
+  if (g.startsWith('m')) return 'male'
+  if (g.startsWith('f')) return 'female'
+  if (g === 'other' || g === 'non-binary' || g === 'nonbinary') return 'other'
+  return g ? 'other' : null
+}
+
+async function getConfig(sb: SB, key: string): Promise<string | null> {
+  const { data } = await sb
+    .from('sync_config')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle()
+  return data?.value != null ? String((data as { value: unknown }).value) : null
+}
+
+async function setConfig(sb: SB, key: string, value: string): Promise<void> {
+  await sb.from('sync_config').upsert({ key, value }, { onConflict: 'key' })
+}
+
+function tabRange(tab: TemplateTab, suffix: string): string {
+  return `'${tab.replace(/'/g, "''")}'!${suffix}`
+}
+
+async function readTab(token: string, sheetId: string, tab: TemplateTab): Promise<string[][]> {
+  const meta = TEMPLATE_TABS[tab]
+  const range = tabRange(tab, `B1:${meta.lastCol}1200`)
+  const res = await gfetch(
+    token,
+    `/spreadsheets/${sheetId}/values:batchGet?majorDimension=ROWS&ranges=${encodeURIComponent(range)}`,
+  )
+  const vrs = (res.valueRanges ?? []) as { values?: string[][] }[]
+  return (vrs[0]?.values ?? []) as string[][]
+}
+
+/** Clear only the data region of a tab — banner + header rows are preserved. */
+async function clearTabData(token: string, sheetId: string, tab: TemplateTab): Promise<void> {
+  const meta = TEMPLATE_TABS[tab]
+  const range = tabRange(tab, `B${meta.dataStart}:${meta.lastCol}1200`)
+  await gfetch(token, `/spreadsheets/${sheetId}/values:batchClear`, {
+    method: 'POST',
+    body: JSON.stringify({ ranges: [range] }),
+  })
+}
+
+/** Write rows (header row first) over the tab's data region. */
+async function writeTab(
+  token: string,
+  sheetId: string,
+  tab: TemplateTab,
+  rows: (string | number | null)[][],
+): Promise<void> {
+  const meta = TEMPLATE_TABS[tab]
+  const range = tabRange(tab, `B${meta.headerRow}:${meta.lastCol}${meta.headerRow + rows.length - 1}`)
+  await gfetch(token, `/spreadsheets/${sheetId}/values:batchUpdate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      valueInputOption: 'USER_ENTERED',
+      data: [{ range, majorDimension: 'ROWS', values: rows }],
+    }),
+  })
+}
+
+interface TemplateClient {
+  id: string
+  full_name: string | null
+  email: string | null
+  phone: string | null
+  date_of_birth: string | null
+  gender: string | null
+  height_cm: number | null
+  weight_kg: number | null
+  intake_profile: Record<string, unknown> | null
+}
+
+/** Build a client lookup keyed by email, lowercase name, and sheet Client ID. */
+async function loadClientMap(sb: SB): Promise<Map<string, TemplateClient>> {
+  const { data } = await (sb as SB & { from: (t: string) => any })
+    .from('clients')
+    .select('id,full_name,email,phone,date_of_birth,gender,height_cm,weight_kg,intake_profile')
+  const map = new Map<string, TemplateClient>()
+  for (const c of (data ?? []) as TemplateClient[]) {
+    if (c.email) map.set(`email:${c.email.toLowerCase()}`, c)
+    if (c.full_name) map.set(`name:${c.full_name.toLowerCase()}`, c)
+    const sid = (c.intake_profile as Record<string, unknown> | null)?.sheet_client_id
+    if (sid) map.set(`sid:${String(sid).toLowerCase()}`, c)
+  }
+  return map
+}
+
+function findClient(map: Map<string, TemplateClient>, key: string): TemplateClient | null {
+  const k = key.trim().toLowerCase()
+  return map.get(`email:${k}`) ?? map.get(`name:${k}`) ?? map.get(`sid:${k}`) ?? null
+}
+
+// ---- template_pull ----------------------------------------------------------
+
+async function templatePull(sb: SB, token: string, sheetId: string) {
+  const db = sb as SB & { from: (t: string) => any }
+  const counts = {
+    clients: { inserted: 0, updated: 0, skipped: 0 },
+    measurements: { inserted: 0, updated: 0, skipped: 0 },
+    workout_logs: { inserted: 0, updated: 0, skipped: 0 },
+  }
+  const errors: string[] = []
+  const noteErr = (where: string, e: unknown) => {
+    if (errors.length < 10) errors.push(`${where}: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  // CLIENTS — upsert by email; sheet Client ID lives inside intake_profile.
+  const clientRows = (await readTab(token, sheetId, 'CLIENTS')).slice(
+    TEMPLATE_TABS.CLIENTS.dataStart - 1,
+  )
+  for (const row of clientRows) {
+    const email = str(row[2])
+    const name = str(row[1])
+    if (!email && !name) continue
+    if (!email.includes('@')) {
+      counts.clients.skipped++
+      continue
+    }
+    const dob = parseSheetDate(str(row[4]))
+    const { data: existing } = await db
+      .from('clients')
+      .select('id,intake_profile')
+      .eq('email', email.toLowerCase())
+      .maybeSingle()
+    const profile: Record<string, unknown> = {
+      ...(existing?.intake_profile ?? {}),
+    }
+    if (str(row[0])) profile.sheet_client_id = str(row[0])
+    const goalW = num(row[9])
+    const bf = num(row[10])
+    if (goalW !== null) profile.goal_weight_kg = goalW
+    if (bf !== null) profile.start_body_fat_pct = bf
+    const patch = {
+      full_name: name || undefined,
+      phone: str(row[3]) || null,
+      date_of_birth: dob ? dob.slice(0, 10) : null,
+      gender: normGender(row[6]),
+      height_cm: num(row[7]),
+      weight_kg: num(row[8]),
+      intake_profile: profile,
+      updated_at: new Date().toISOString(),
+    }
+    if (existing) {
+      const { error } = await db.from('clients').update(patch).eq('id', existing.id)
+      if (error) {
+        counts.clients.skipped++
+        noteErr(`client ${email}`, error.message ?? error)
+      } else counts.clients.updated++
+    } else {
+      const { error } = await db.from('clients').insert({
+        email: email.toLowerCase(),
+        trainer_id: DEFAULT_TRAINER,
+        ...patch,
+      })
+      if (error) {
+        counts.clients.skipped++
+        noteErr(`client ${email}`, error.message ?? error)
+      } else counts.clients.inserted++
+    }
+  }
+
+  const map = await loadClientMap(sb)
+
+  // MEASUREMENTS — upsert by (client, recorded_at).
+  const measRows = (await readTab(token, sheetId, 'MEASUREMENTS')).slice(
+    TEMPLATE_TABS.MEASUREMENTS.dataStart - 1,
+  )
+  for (const row of measRows) {
+    const client = findClient(map, str(row[0]))
+    const rec = parseSheetDate(str(row[1]))
+    if (!client || !rec) {
+      counts.measurements.skipped++
+      continue
+    }
+    const payload = {
+      client_id: client.id,
+      recorded_at: rec,
+      weight_kg: num(row[3]),
+      body_fat_percentage: num(row[4]),
+      chest_cm: num(row[5]),
+      waist_cm: num(row[6]),
+      hips_cm: num(row[7]),
+      thighs_cm: num(row[8]),
+      arms_cm: num(row[9]),
+      bmi: num(row[10]),
+      notes: str(row[11]) || null,
+    }
+    const { data: ex } = await db
+      .from('body_composition')
+      .select('id')
+      .eq('client_id', client.id)
+      .eq('recorded_at', rec)
+      .maybeSingle()
+    if (ex) {
+      const { error } = await db.from('body_composition').update(payload).eq('id', ex.id)
+      if (error) counts.measurements.skipped++
+      else counts.measurements.updated++
+    } else {
+      const { error } = await db.from('body_composition').insert(payload)
+      if (error) counts.measurements.skipped++
+      else counts.measurements.inserted++
+    }
+  }
+
+  // WORKOUT LOG — group rows by (client, date), one parent log per day.
+  const logRows = (await readTab(token, sheetId, 'WORKOUT LOG')).slice(
+    TEMPLATE_TABS['WORKOUT LOG'].dataStart - 1,
+  )
+  const groups = new Map<string, string[][]>()
+  for (const row of logRows) {
+    const clientKey = str(row[0])
+    const date = parseSheetDate(str(row[1]))
+    const exercise = str(row[6])
+    if (!clientKey || !date || !exercise) continue
+    const key = `${clientKey.toLowerCase()}|${date}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(row)
+  }
+  for (const [key, rows] of groups) {
+    const [clientKey, date] = [key.slice(0, key.lastIndexOf('|')), key.slice(key.lastIndexOf('|') + 1)]
+    const client = findClient(map, clientKey)
+    if (!client) {
+      counts.workout_logs.skipped += rows.length
+      continue
+    }
+    const dayStart = new Date(date)
+    const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000).toISOString()
+    const phase = str(rows[0][3])
+    const session = str(rows[0][4])
+    const notes = [phase && `Phase ${phase}`, session && `Session ${session}`]
+      .filter(Boolean)
+      .join(' · ')
+    const { data: parent } = await db
+      .from('workout_logs')
+      .select('id')
+      .eq('client_id', client.id)
+      .gte('completed_at', date)
+      .lt('completed_at', dayEnd)
+      .maybeSingle()
+    let logId: string
+    if (parent) {
+      logId = parent.id
+      await db.from('workout_logs').update({ notes: notes || null }).eq('id', logId)
+      counts.workout_logs.updated++
+    } else {
+      const { data: created, error } = await db
+        .from('workout_logs')
+        .insert({ client_id: client.id, completed_at: date, notes: notes || null })
+        .select('id')
+        .maybeSingle()
+      if (error || !created) {
+        counts.workout_logs.skipped += rows.length
+        continue
+      }
+      logId = created.id
+      counts.workout_logs.inserted++
+    }
+    // One entry per exercise, per-set arrays ordered by Set #.
+    const byExercise = new Map<string, string[][]>()
+    for (const r of rows) {
+      const name = str(r[6])
+      if (!byExercise.has(name)) byExercise.set(name, [])
+      byExercise.get(name)!.push(r)
+    }
+    for (const [name, setRows] of byExercise) {
+      setRows.sort((a, b) => (num(a[7]) ?? 0) - (num(b[7]) ?? 0))
+      const loads = setRows.map((r) => num(r[8]) ?? 0)
+      const reps = setRows.map((r) => num(r[9]) ?? 0)
+      const rpes = setRows.map((r) => num(r[10]) ?? 0)
+      const payload = {
+        workout_log_id: logId,
+        client_id: client.id,
+        exercise_id: null,
+        exercise_name: name,
+        total_sets: setRows.length,
+        sets_completed: setRows.length,
+        reps_per_set: reps,
+        weight_per_set: loads,
+        rpe_per_set: rpes,
+        notes: null,
+      }
+      const { data: ex } = await db
+        .from('workout_log_entries')
+        .select('id')
+        .eq('workout_log_id', logId)
+        .eq('exercise_name', name)
+        .maybeSingle()
+      if (ex) await db.from('workout_log_entries').update(payload).eq('id', ex.id)
+      else await db.from('workout_log_entries').insert(payload)
+    }
+  }
+  return { ...counts, errors }
+}
+
+// ---- template_push ----------------------------------------------------------
+
+async function templatePush(sb: SB, token: string, sheetId: string) {
+  const db = sb as SB & { from: (t: string) => any }
+  const out: Record<string, number> = {}
+
+  // CLIENTS
+  const { data: clients } = await db
+    .from('clients')
+    .select('id,full_name,email,phone,date_of_birth,gender,height_cm,weight_kg,intake_profile')
+    .order('full_name')
+  const idMap = new Map<string, string>()
+  const cRows: (string | number | null)[][] = [[
+    'Client ID', 'Name', 'Email', 'Phone', 'Date of Birth', 'Age', 'Gender',
+    'Height (cm)', 'Start Weight (kg)', 'Goal Weight (kg)', 'Body Fat %',
+  ]]
+  let seq = 1
+  const nowY = new Date().getUTCFullYear()
+  for (const c of (clients ?? []) as TemplateClient[]) {
+    const profile = (c.intake_profile ?? {}) as Record<string, unknown>
+    const sid = str(profile.sheet_client_id) || `C-${String(seq).padStart(3, '0')}`
+    idMap.set(c.id, sid)
+    const dob = c.date_of_birth ? new Date(c.date_of_birth) : null
+    const age = dob ? nowY - dob.getUTCFullYear() : null
+    cRows.push([
+      sid, c.full_name ?? '', c.email ?? '', c.phone ?? '',
+      c.date_of_birth ? fmtSheetDate(c.date_of_birth) : '', age,
+      c.gender ?? '', c.height_cm ?? '', c.weight_kg ?? '',
+      (profile.goal_weight_kg as number | undefined) ?? null,
+      (profile.start_body_fat_pct as number | undefined) ?? null,
+    ])
+    seq++
+  }
+  await clearTabData(token, sheetId, 'CLIENTS')
+  await writeTab(token, sheetId, 'CLIENTS', cRows)
+  out.CLIENTS = cRows.length - 1
+
+  // MEASUREMENTS
+  const { data: meas } = await db
+    .from('body_composition')
+    .select('client_id,recorded_at,weight_kg,body_fat_percentage,chest_cm,waist_cm,hips_cm,thighs_cm,arms_cm,bmi,notes')
+    .order('recorded_at')
+  const mRows: (string | number | null)[][] = [[
+    'Client', 'Date', 'Week', 'Weight (kg)', 'Body Fat %', 'Chest (cm)', 'Waist (cm)',
+    'Hips (cm)', 'Thigh (cm)', 'Arm (cm)', 'BMI', 'Notes',
+  ]]
+  for (const m of meas ?? []) {
+    const r = m as Record<string, unknown>
+    const sid = idMap.get(String(r.client_id))
+    if (!sid) continue
+    mRows.push([
+      sid, r.recorded_at ? fmtSheetDate(String(r.recorded_at)) : '', '',
+      (r.weight_kg as number | null) ?? null,
+      (r.body_fat_percentage as number | null) ?? null,
+      (r.chest_cm as number | null) ?? null,
+      (r.waist_cm as number | null) ?? null,
+      (r.hips_cm as number | null) ?? null,
+      (r.thighs_cm as number | null) ?? null,
+      (r.arms_cm as number | null) ?? null,
+      (r.bmi as number | null) ?? null,
+      str(r.notes) || null,
+    ])
+  }
+  await clearTabData(token, sheetId, 'MEASUREMENTS')
+  await writeTab(token, sheetId, 'MEASUREMENTS', mRows)
+  out.MEASUREMENTS = mRows.length - 1
+
+  // WORKOUT LOG
+  const { data: logs } = await db
+    .from('workout_logs')
+    .select('id,client_id,completed_at,notes')
+    .order('completed_at')
+  const { data: entries } = await db
+    .from('workout_log_entries')
+    .select('workout_log_id,exercise_name,total_sets,reps_per_set,weight_per_set,rpe_per_set')
+  const byLog = new Map<string, Record<string, unknown>[]>()
+  for (const e of (entries ?? []) as Record<string, unknown>[]) {
+    const lid = String(e.workout_log_id)
+    if (!byLog.has(lid)) byLog.set(lid, [])
+    byLog.get(lid)!.push(e)
+  }
+  const wRows: (string | number | null)[][] = [[
+    'Client', 'Date', 'Week', 'Phase', 'Session', 'Order', 'Exercise',
+    'Set #', 'Load (kg)', 'Reps', 'RPE', 'Volume (kg)', 'Target Reps',
+  ]]
+  for (const log of logs ?? []) {
+    const l = log as Record<string, unknown>
+    const sid = idMap.get(String(l.client_id))
+    if (!sid) continue
+    const dateStr = l.completed_at ? fmtSheetDate(String(l.completed_at)) : ''
+    const exList = byLog.get(String(l.id)) ?? []
+    exList.forEach((e, orderIdx) => {
+      const loads = (e.weight_per_set as number[] | null) ?? []
+      const reps = (e.reps_per_set as number[] | null) ?? []
+      const rpes = (e.rpe_per_set as number[] | null) ?? []
+      const sets = Math.max(loads.length, reps.length, Number(e.total_sets ?? 0), 1)
+      for (let i = 0; i < sets; i++) {
+        const load = loads[i] ?? null
+        const rep = reps[i] ?? null
+        wRows.push([
+          sid, dateStr, '', '', '', orderIdx + 1, str(e.exercise_name),
+          i + 1, load, rep, rpes[i] ?? null,
+          load !== null && rep !== null ? Math.round(load * rep * 10) / 10 : null,
+          '',
+        ])
+      }
+    })
+  }
+  await clearTabData(token, sheetId, 'WORKOUT LOG')
+  await writeTab(token, sheetId, 'WORKOUT LOG', wRows)
+  out['WORKOUT LOG'] = wRows.length - 1
+
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
@@ -440,6 +904,80 @@ Deno.serve(async (req: Request) => {
   const trainerId = String(body.trainer_id ?? DEFAULT_TRAINER)
   const action = String(body.action ?? 'status')
   const programId = body.program_id ? String(body.program_id) : null
+
+  // ---- template mode (trainer master workbook) --------------------------------
+  if (action.startsWith('template_')) {
+    let sheetId = await getConfig(supabase, 'template_sheet_id')
+    if (action === 'template_status') {
+      return json({
+        configured: Boolean(await resolveServiceAccount(supabase)),
+        sheet_id: sheetId,
+        sheet_url: sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : null,
+        sheet_synced_at: await getConfig(supabase, 'template_synced_at'),
+      })
+    }
+    // A sheet_id / sheet_ref sent with any action links it first — the coach UI
+    // connects and pushes in a single call, so link-on-push is the happy path.
+    const bodyRef = str(body.sheet_ref ?? body.sheet_id)
+    if (bodyRef) {
+      const m =
+        bodyRef.match(/\/d\/([a-zA-Z0-9-_]{20,})/) ?? bodyRef.match(/^([a-zA-Z0-9-_]{20,})$/)
+      if (!m) return json({ error: 'could not parse a spreadsheet ID from sheet_ref/sheet_id' }, 400)
+      await setConfig(supabase, 'template_sheet_id', m[1])
+      sheetId = m[1]
+    }
+    if (action === 'template_link') {
+      return json({
+        sheet_id: sheetId,
+        sheet_url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit`,
+      })
+    }
+    const sa = await resolveServiceAccount(supabase)
+    if (!sa) {
+      return json(
+        {
+          error:
+            'Google Sheets not configured — set the GOOGLE_SERVICE_ACCOUNT_JSON project secret with a Google service account key (Sheets API enabled).',
+          configured: false,
+        },
+        400,
+      )
+    }
+    if (!sheetId) {
+      return json({ error: 'no template sheet linked — paste the sheet URL first' }, 400)
+    }
+    const token = await googleAccessToken(sa)
+    const now = new Date().toISOString()
+    try {
+      if (action === 'template_pull') {
+        const counts = await templatePull(supabase, token, sheetId)
+        await setConfig(supabase, 'template_synced_at', now)
+        const c = counts as { clients: { inserted: number; updated: number }; measurements: { inserted: number; updated: number }; workout_logs: { inserted: number; updated: number } }
+        const rows_imported =
+          c.clients.inserted + c.clients.updated +
+          c.measurements.inserted + c.measurements.updated +
+          c.workout_logs.inserted + c.workout_logs.updated
+        return json({ ...counts, rows_imported, sheet_synced_at: now })
+      }
+      if (action === 'template_push') {
+        const rows = await templatePush(supabase, token, sheetId)
+        await setConfig(supabase, 'template_synced_at', now)
+        return json({
+          rows_written: rows,
+          rows_imported: Object.values(rows).reduce((a, b) => a + (b as number), 0),
+          sheet_id: sheetId,
+          sheet_url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit`,
+          sheet_synced_at: now,
+        })
+      }
+    } catch (e) {
+      return json(
+        { error: e instanceof Error ? e.message : 'unknown error', action },
+        500,
+      )
+    }
+    return json({ error: `unknown action: ${action}` }, 400)
+  }
 
   // ---- action: status -------------------------------------------------------
   if (action === 'status') {
