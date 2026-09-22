@@ -125,6 +125,15 @@
     color: var(--vault-gold-bright);
   }
 
+  /* Display title — Cinzel + gold-light, matches the portal greeting
+     (PortalLogin) and the tv2 .section-head accent. Used on public
+     form surfaces (enquiry modal, /intake, 404) so every client-facing
+     heading speaks the same visual language. */
+  .display-title {
+    font-family: var(--font-display);
+    color: var(--gold-light);
+  }
+
   /* Marketing primary white button — design.md §5.1 */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 bg-white text-[13px] uppercase font-normal;

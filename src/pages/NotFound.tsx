@@ -17,7 +17,7 @@ export default function NotFound() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.08 }}
-        className="mt-4 font-serif text-4xl font-bold leading-tight md:text-5xl"
+        className="display-title mt-4 text-4xl font-bold leading-tight md:text-5xl"
       >
         This page is locked in the vault.
       </motion.h1>

@@ -303,7 +303,9 @@ function missingFields(step: Step, values: Values): Set<string> {
 
 const inputCls = (invalid: boolean) =>
   `w-full border bg-vault-bg px-3 py-2.5 text-[14px] text-white placeholder:text-vault-faint focus:outline-none transition-colors ${
-    invalid ? 'border-[#ff6b6b]' : 'border-vault-border focus:border-white/70'
+    invalid
+      ? 'border-[#ff6b6b]'
+      : 'border-vault-border focus:border-gold focus:shadow-[0_0_0_1px_var(--vault-gold)]'
   }`
 
 // ---------------------------------------------------------------------------
@@ -405,7 +407,7 @@ function FieldControl({
           value={num}
           aria-label={field.label}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="h-1 flex-1 cursor-pointer appearance-none bg-vault-border accent-white"
+          className="h-1 flex-1 cursor-pointer appearance-none bg-vault-border accent-[#d4af37]"
         />
         <span className="tnum w-10 shrink-0 bg-white py-1 text-center text-[13px] font-bold text-vault-btn-text">{num}</span>
       </div>
@@ -595,7 +597,7 @@ function ContactForm() {
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
           <Check className="h-8 w-8 text-vault-btn-text" strokeWidth={2.5} />
         </span>
-        <h2 className="mt-6 text-2xl font-bold text-white">We'll be in touch</h2>
+        <h2 className="display-title mt-6 text-2xl font-bold">We'll be in touch</h2>
         <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-vault-muted">
           Your enquiry has gone to our front desk. We'll reach you via{' '}
           <span className="font-bold text-white">{via}</span>
@@ -608,7 +610,7 @@ function ContactForm() {
   return (
     <form onSubmit={submit} noValidate className="app-card p-6 md:p-8">
       <p className="eyebrow">Quick contact</p>
-      <h2 className="mt-2 text-xl font-bold text-white">How can we reach you?</h2>
+      <h2 className="display-title mt-2 text-xl font-bold">How can we reach you?</h2>
       <p className="mt-1.5 text-[13px] text-vault-muted">No long forms — just the essentials.</p>
 
       <div className="mt-7 space-y-5">
@@ -849,7 +851,7 @@ function TrialFlow() {
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
           <Check className="h-8 w-8 text-vault-btn-text" strokeWidth={2.5} />
         </span>
-        <h2 className="mt-6 text-2xl font-bold text-white">Trial request sent</h2>
+        <h2 className="display-title mt-6 text-2xl font-bold">Trial request sent</h2>
         <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-vault-muted">
           Our team will confirm your trial session shortly — watch your phone for a{' '}
           {PREF_OPTIONS.find((p) => p.id === answers.pref)?.label.replace(' me', '').toLowerCase()}.
@@ -864,7 +866,7 @@ function TrialFlow() {
       <div>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="app-card p-6 md:p-8">
           <p className="eyebrow">Trial request · summary</p>
-          <h2 className="mt-2 text-xl font-bold text-white md:text-2xl">Your trial details</h2>
+          <h2 className="display-title mt-2 text-xl font-bold md:text-2xl">Your trial details</h2>
           <p className="mt-1.5 text-[13px] text-vault-muted">
             Check everything looks right — print or save a copy for yourself, then send it to us.
           </p>
@@ -872,7 +874,7 @@ function TrialFlow() {
           {/* Print area — the only thing visible on paper (see index.css) */}
           <div className="print-area mt-6 border border-vault-border/70">
             <div className="border-b border-vault-border/70 px-5 py-4">
-              <p className="font-serif text-lg font-bold">The Vault Fitness — Trial Request</p>
+              <p className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>The Vault Fitness — Trial Request</p>
               <p className="tnum text-[12px] opacity-70">{new Date().toLocaleString('en-GB')}</p>
             </div>
             <dl>
@@ -921,7 +923,7 @@ function TrialFlow() {
         </div>
         <div className="h-1 w-full overflow-hidden" style={{ background: 'var(--viz-track)' }}>
           <motion.div
-            className="h-full bg-white"
+            className="h-full bg-gold"
             initial={false}
             animate={{ width: `${((idx + 1) / total) * 100}%` }}
             transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -940,7 +942,7 @@ function TrialFlow() {
           {isContactStep ? (
             <>
               <p className="eyebrow">Contact</p>
-              <h2 className="mt-2 text-xl font-bold text-white">Where do we send the confirmation?</h2>
+              <h2 className="display-title mt-2 text-xl font-bold">Where do we send the confirmation?</h2>
               <div className="mt-6 space-y-5">
                 <div>
                   <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-vault-muted">Full name</label>
@@ -975,7 +977,7 @@ function TrialFlow() {
           ) : (
             <>
               <p className="eyebrow">{stepDef!.name}</p>
-              <h2 className="mt-2 text-xl font-bold text-white">{stepDef!.desc}</h2>
+              <h2 className="display-title mt-2 text-xl font-bold">{stepDef!.desc}</h2>
               <div className="mt-6 flex flex-wrap gap-2">
                 {stepDef!.options.map((o) => {
                   const active =
@@ -1152,7 +1154,7 @@ function IntakeWizard({ tag }: { tag: 'membership' | 'training' }) {
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
           <Check className="h-8 w-8 text-vault-btn-text" strokeWidth={2.5} />
         </span>
-        <h2 className="mt-6 text-2xl font-bold text-white">You're all set!</h2>
+        <h2 className="display-title mt-6 text-2xl font-bold">You're all set!</h2>
         <p className="mx-auto mt-3 max-w-md text-[14px] leading-relaxed text-vault-muted">
           Your intake file has been downloaded and sent to our team — we'll be in touch to arrange
           your <span className="font-bold text-white">{tag === 'membership' ? 'membership' : 'training'}</span>{' '}
@@ -1175,7 +1177,7 @@ function IntakeWizard({ tag }: { tag: 'membership' | 'training' }) {
         </div>
         <div className="h-1 w-full overflow-hidden" style={{ background: 'var(--viz-track)' }}>
           <motion.div
-            className="h-full bg-white"
+            className="h-full bg-gold"
             initial={false}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -1194,7 +1196,7 @@ function IntakeWizard({ tag }: { tag: 'membership' | 'training' }) {
             className="app-card p-6 md:p-8"
           >
             <p className="eyebrow">{String(stepIdx + 1).padStart(2, '0')} · {step.name}</p>
-            <h2 className="mt-2 text-xl font-bold text-white md:text-2xl">{step.name}</h2>
+            <h2 className="display-title mt-2 text-xl font-bold md:text-2xl">{step.name}</h2>
             <p className="mt-1.5 text-[13px] text-vault-muted">{step.desc}</p>
 
             <div className="mt-7 grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -1282,7 +1284,7 @@ export default function Intake() {
             height={638}
           />
           <p className="eyebrow mt-6">Client Intake</p>
-          <h1 className="mt-2 font-serif text-3xl font-bold text-white md:text-4xl">
+          <h1 className="display-title mt-2 text-3xl font-bold md:text-4xl">
             Let's build your plan.
           </h1>
           <p className="mt-2 text-[13px] text-vault-muted">{MODE_SUBTITLES[mode]}</p>

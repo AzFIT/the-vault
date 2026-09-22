@@ -85,7 +85,7 @@ function EnquiryModalInner({ planId, onClose }: { planId: string; onClose: () =>
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 32 }}
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className="relative flex max-h-[100dvh] w-full flex-col border border-vault-border bg-black sm:my-8 sm:max-h-[88dvh] sm:max-w-lg"
+            className="relative flex max-h-[100dvh] w-full flex-col border border-vault-border bg-vault-surface sm:my-8 sm:max-h-[88dvh] sm:max-w-lg"
           >
             {status === 'done' ? (
               <SuccessPanel route={route} onClose={onClose} />
@@ -97,7 +97,7 @@ function EnquiryModalInner({ planId, onClose }: { planId: string; onClose: () =>
                     <p className="eyebrow">
                       {route === 'reception' ? 'Pass Enquiry' : 'Membership Enquiry'}
                     </p>
-                    <h3 className="mt-2 text-[22px] font-bold leading-tight text-white">
+                    <h3 className="display-title mt-2 text-[22px] font-bold leading-tight">
                       {planLabel(planId)}
                     </h3>
                     <p className="mt-2 text-[13px] leading-relaxed text-vault-muted">
@@ -149,7 +149,7 @@ function SuccessPanel({ route, onClose }: { route: EnquiryRoute; onClose: () => 
       >
         <Check className="h-6 w-6 text-gold" />
       </motion.span>
-      <h3 className="mt-6 text-[22px] font-bold text-white">
+      <h3 className="display-title mt-6 text-[22px] font-bold">
         Thank you — we'll be in touch shortly
       </h3>
       <p className="mt-3 max-w-xs text-[13px] leading-relaxed text-vault-muted">
