@@ -107,9 +107,26 @@ const HERO_SLIDES = [
   { src: 'hero-slide-5.jpg', alt: 'Cardio and machine area at The Vault' },
 ]
 
+const FACILITY_SLIDES = [
+  { src: 'gym-facilities.jpg', alt: 'The Vault Fitness gym floor' },
+  { src: 'facility-slide-2.jpg', alt: 'Strength and conditioning equipment at The Vault' },
+  { src: 'facility-slide-3.jpg', alt: 'Personal training studio space at The Vault' },
+  { src: 'facility-slide-4.jpg', alt: 'Strength class training at The Vault' },
+  { src: 'facility-slide-5.jpg', alt: 'Spacious changing facilities at The Vault' },
+]
+
 const SLIDE_MS = 5000
 
-function HeroSlideshow() {
+type Slide = { src: string; alt: string }
+
+/**
+ * Shared fade-to-black slideshow: one slide visible at a time on a 5s
+ * cycle (fade in 0–2s, hold, fade out 4–5s, brief black beat), endless
+ * loop. Arrows + dots bottom-right let visitors cycle manually — the
+ * timer resets after every manual pick. Reduced-motion users get a
+ * static first image.
+ */
+function FadeSlideshow({ slides }: { slides: Slide[] }) {
   const [index, setIndex] = useState(0)
   /** Bumped on every manual change so the CSS cycle restarts on the new slide */
   const [nonce, setNonce] = useState(0)
@@ -117,7 +134,7 @@ function HeroSlideshow() {
   const staticMode = reducedMotion()
 
   const go = (next: number) => {
-    setIndex(((next % HERO_SLIDES.length) + HERO_SLIDES.length) % HERO_SLIDES.length)
+    setIndex(((next % slides.length) + slides.length) % slides.length)
     setNonce((n) => n + 1)
   }
 
@@ -133,20 +150,21 @@ function HeroSlideshow() {
   if (staticMode) {
     return (
       <img
-        src={asset(HERO_SLIDES[0].src)}
-        alt={HERO_SLIDES[0].alt}
+        src={asset(slides[0].src)}
+        alt={slides[0].alt}
         className="absolute inset-0 h-full w-full object-cover"
       />
     )
   }
 
-  const slide = HERO_SLIDES[index]
+  const slide = slides[index]
   return (
     <div className="absolute inset-0 overflow-hidden bg-black">
       <img
         key={`${index}-${nonce}`}
         src={asset(slide.src)}
         alt={slide.alt}
+        loading="lazy"
         className="hero-slide-img absolute inset-0 h-full w-full object-cover"
       />
 
@@ -161,7 +179,7 @@ function HeroSlideshow() {
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-1.5 px-1">
-          {HERO_SLIDES.map((s, i) => (
+          {slides.map((s, i) => (
             <button
               key={s.src}
               type="button"
@@ -185,6 +203,8 @@ function HeroSlideshow() {
     </div>
   )
 }
+
+const HeroSlideshow = () => <FadeSlideshow slides={HERO_SLIDES} />
 
 /* ------------------------------------------------------------------ */
 /* Section 1 — Split hero (Phase 2 spec)                                */
@@ -482,13 +502,8 @@ function Facilities() {
   return (
     <section id="the-gym" className="bg-[#111214] pb-[80px] md:pb-[110px]">
       <div className="flex flex-col lg:flex-row">
-        <div className="relative min-h-[46vh] overflow-hidden lg:min-h-[70vh] lg:w-[55%]">
-          <img
-            src={asset('gym-facilities.jpg')}
-            alt="The Vault Fitness gym floor"
-            loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+        <div className="relative min-h-[46vh] overflow-hidden bg-black lg:min-h-[70vh] lg:w-[55%]">
+          <FadeSlideshow slides={FACILITY_SLIDES} />
           <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(17,18,20,0.25), rgba(17,18,20,0))' }} />
         </div>
         <div className="flex items-center bg-[#111214] lg:w-[45%]">
