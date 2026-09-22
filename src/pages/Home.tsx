@@ -100,6 +100,7 @@ function useCountUp(target: number) {
 /* ------------------------------------------------------------------ */
 
 const HERO_SLIDES = [
+  { src: 'hero-home.jpg', alt: 'A woman performing a barbell deadlift while being coached by a personal trainer at The Vault Fitness' },
   { src: 'hero-slide-1.jpg', alt: 'The Vault training floor with the vault door' },
   { src: 'hero-slide-2.jpg', alt: 'Weightlifting platform and racks at The Vault' },
   { src: 'hero-slide-3.jpg', alt: 'Small-group class training at The Vault' },
