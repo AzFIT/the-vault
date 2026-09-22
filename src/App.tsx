@@ -80,8 +80,8 @@ export default function App() {
           unguarded while auth is tester-mode (same trade-off as /intake) */}
       <Route path="/portal/insights/report" element={page(<PortalInsightsReport />)} />
 
-      {/* Phase 1 design-token showcase — temporary, no chrome */}
-      <Route path="/style-guide" element={page(<StyleGuide />)} />
+      {/* Phase 1 design-token showcase — dev only (gated in Phase 5) */}
+      {import.meta.env.DEV && <Route path="/style-guide" element={page(<StyleGuide />)} />}
 
       {/* Management portal — Phase A tester sign-in (no real auth yet) */}
       <Route path="/portal/login" element={page(<PortalLogin />)} />

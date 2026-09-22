@@ -140,3 +140,9 @@
 .tv2 .bg-gold\/90 .text-vault-faint {
   color: rgba(0, 0, 0, 0.65);
 }
+
+/* ---- 7) Phase 5: gold focus rings, never default blue ---- */
+.tv2 :focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
