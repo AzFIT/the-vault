@@ -229,7 +229,7 @@ export default function FrontDeskShell() {
     }
   }, [])
 
-  if (!profile || profile.role !== 'front-desk') {
+  if (!profile || (profile.role !== 'front-desk' && profile.role !== 'owner')) {
     return (
       <div className="app-black flex min-h-[100dvh] items-center justify-center bg-vault-bg" role="status" aria-label="Loading">
         <span className="h-8 w-8 animate-spin rounded-full border-2 border-vault-border border-t-gold" />
