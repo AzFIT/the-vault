@@ -11,7 +11,30 @@
  */
 
 export type EnquiryRoute = 'reception' | 'senior'
-export type EnquiryStatus = 'new' | 'contacted'
+/** CRM pipeline: New → Contacted → Trial Booked → Converted · Cold = parked */
+export type EnquiryStatus = 'new' | 'contacted' | 'trial-booked' | 'converted' | 'cold'
+
+export const ENQUIRY_STATUSES: EnquiryStatus[] = ['new', 'contacted', 'trial-booked', 'converted', 'cold']
+
+export const STATUS_LABELS: Record<EnquiryStatus, string> = {
+  new: 'New',
+  contacted: 'Contacted',
+  'trial-booked': 'Trial booked',
+  converted: 'Converted',
+  cold: 'Cold',
+}
+
+/** DB (title case) ↔ app (kebab) status mapping */
+const DB_STATUS: Record<EnquiryStatus, string> = {
+  new: 'New',
+  contacted: 'Contacted',
+  'trial-booked': 'Trial Booked',
+  converted: 'Converted',
+  cold: 'Cold',
+}
+const APP_STATUS: Record<string, EnquiryStatus> = Object.fromEntries(
+  Object.entries(DB_STATUS).map(([app, db]) => [db, app as EnquiryStatus]),
+)
 
 export interface Enquiry {
   id: string
@@ -29,6 +52,10 @@ export interface Enquiry {
   payload: Record<string, unknown>
   /** Supabase row id once the cloud mirror has landed */
   cloudId?: string
+  /** staff member responsible for following up (name) */
+  assignedTo?: string
+  /** free-text staff notes */
+  notes?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -80,8 +107,8 @@ async function cloudInsert(rec: Enquiry): Promise<string | null> {
   }
 }
 
-/** Staff-gated cloud read. Returns [] when the network/gate fails. */
-export async function fetchCloudEnquiries(): Promise<Enquiry[]> {
+/** Staff-gated raw cloud read. Returns null when the network/gate fails. */
+async function cloudList(): Promise<Enquiry[] | null> {
   try {
     const res = await fetch(INBOX_URL, {
       method: 'POST',
@@ -92,7 +119,6 @@ export async function fetchCloudEnquiries(): Promise<Enquiry[]> {
     const data = (await res.json()) as { enquiries: Record<string, unknown>[] }
     return (data.enquiries ?? []).map((row) => {
       const payload = (row.payload as Record<string, unknown>) ?? {}
-      const dbStatus = String(row.status ?? 'New')
       return {
         id: `cloud_${String(row.id)}`,
         cloudId: String(row.id),
@@ -100,14 +126,49 @@ export async function fetchCloudEnquiries(): Promise<Enquiry[]> {
         plan: String(payload.plan ?? row.source ?? 'general'),
         planLabel: String(row.title ?? 'Enquiry'),
         createdAt: String(row.created_at),
-        status: dbStatus === 'New' ? 'new' : 'contacted',
+        status: APP_STATUS[String(row.status ?? 'New')] ?? 'new',
         payload,
+        assignedTo: (row.assigned_to as string) || undefined,
+        notes: (row.notes as string) || undefined,
       }
     })
   } catch (err) {
-    console.warn('[enquiries] cloud fetch failed, showing local only', err)
-    return []
+    console.warn('[enquiries] cloud fetch failed', err)
+    return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// Merged view: cloud (primary) + local-only records (offline submissions and
+// anything saved before cloud mirroring existed). The cloud cache is kept in
+// module memory so every dashboard count reflects Supabase after one fetch.
+// ---------------------------------------------------------------------------
+
+let cloudCache: Enquiry[] | null = null
+
+export function mergeCloudLocal(cloud: Enquiry[], local: Enquiry[]): Enquiry[] {
+  const cloudIds = new Set(cloud.map((c) => c.cloudId))
+  const localOnly = local.filter((l) => !l.cloudId || !cloudIds.has(l.cloudId))
+  return [...cloud, ...localOnly]
+}
+
+/**
+ * Refresh the cloud cache from Supabase. Dashboards call this once on mount;
+ * on success it fires ENQUIRIES_CHANGED_EVENT so every subscribed count and
+ * badge re-renders with real numbers. Returns false when the cloud is
+ * unreachable (callers then keep working from the local cache).
+ */
+export async function refreshCloudEnquiries(): Promise<boolean> {
+  const cloud = await cloudList()
+  if (cloud === null) return false // unreachable — keep working from local cache
+  cloudCache = cloud
+  notify()
+  return true
+}
+
+/** Merged view used by dashboards and the Enquiries page. */
+export function fetchEnquiriesMerged(): Enquiry[] {
+  return mergeCloudLocal(cloudCache ?? [], listEnquiries())
 }
 
 /** Fire-and-forget status patch on the cloud row. */
@@ -149,7 +210,47 @@ function saveAll(all: Enquiry[]) {
 }
 
 export function countNewEnquiries(): number {
-  return listEnquiries().filter((e) => e.status === 'new').length
+  return fetchEnquiriesMerged().filter((e) => e.status === 'new').length
+}
+
+/**
+ * Resolve an enquiry id (local `enq_…` or `cloud_<uuid>`) to its cloud row id
+ * and its local-storage record (if any).
+ */
+function resolve(id: string): { cloudId: string | null; local: Enquiry | null } {
+  if (id.startsWith('cloud_')) return { cloudId: id.slice(6), local: null }
+  const local = listEnquiries().find((e) => e.id === id) ?? null
+  return { cloudId: local?.cloudId ?? null, local }
+}
+
+/** Shared mutation path: patch localStorage if present, mirror to the cloud row. */
+function applyPatch(id: string, patch: Partial<Enquiry>, cloudPatch: Record<string, unknown>) {
+  const { cloudId, local } = resolve(id)
+  if (local) {
+    saveAll(listEnquiries().map((e) => (e.id === id ? { ...e, ...patch } : e)))
+  } else {
+    notify()
+  }
+  if (cloudId) cloudUpdate(cloudId, cloudPatch)
+}
+
+/** Move a lead along the pipeline (New → Contacted → Trial booked → Converted / Cold). */
+export function setEnquiryStatus(id: string, status: EnquiryStatus) {
+  applyPatch(id, { status }, { status: DB_STATUS[status] })
+}
+
+export function markContacted(id: string) {
+  setEnquiryStatus(id, 'contacted')
+}
+
+/** Assign (or unassign with '') the staff member responsible for the follow-up. */
+export function assignEnquiry(id: string, assignee: string) {
+  applyPatch(id, { assignedTo: assignee || undefined }, { assigned_to: assignee })
+}
+
+/** Save free-text staff notes on the enquiry. */
+export function setEnquiryNotes(id: string, notes: string) {
+  applyPatch(id, { notes }, { notes })
 }
 
 /**
@@ -176,16 +277,9 @@ export async function submitEnquiry(
   return record
 }
 
-export function markContacted(id: string) {
-  const all = listEnquiries()
-  const target = all.find((e) => e.id === id)
-  if (target?.cloudId) cloudUpdate(target.cloudId, { status: 'Contacted' })
-  saveAll(all.map((e) => (e.id === id ? { ...e, status: 'contacted' } : e)))
-}
-
 /** Download all enquiries as a CSV file. */
 export function exportCsv() {
-  const all = listEnquiries()
+  const all = fetchEnquiriesMerged()
   const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const rows = [
     ['id', 'createdAt', 'status', 'route', 'plan', 'planLabel', 'name', 'mobile', 'email', 'preferredContact', 'payload'],

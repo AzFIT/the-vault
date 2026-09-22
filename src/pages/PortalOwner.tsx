@@ -9,7 +9,7 @@
  * The retired /manage page redirects here. Its revenue-stream and staff
  * charts are slated to return as /portal/insights in a later phase.
  */
-import { useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowDownRight, ArrowUpRight, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react'
@@ -22,7 +22,12 @@ import {
 } from '@/data/mock'
 import { CountUp, SectionHeader } from '@/components/coach/shared'
 import { NOW_LABEL_MINUTES, TODAY_SCHEDULE, timeToMinutes } from '@/components/coach/scheduleData'
-import { countNewEnquiries, listEnquiries } from '@/lib/enquiries'
+import {
+  ENQUIRIES_CHANGED_EVENT,
+  countNewEnquiries,
+  fetchEnquiriesMerged,
+  refreshCloudEnquiries,
+} from '@/lib/enquiries'
 import { useKpiHidden } from '@/lib/kpiHidden'
 import KpiSheet from '@/components/KpiSheet'
 import type { KpiColumn } from '@/components/KpiSheet'
@@ -194,7 +199,7 @@ function KpiRow() {
         { key: 'status', label: 'Status' },
       ],
       filterKey: 'route',
-      rows: listEnquiries().map((e) => ({
+      rows: fetchEnquiriesMerged().map((e) => ({
         date: new Date(e.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
         name: String(e.payload?.name ?? '—'),
         route: e.route === 'reception' ? 'Reception' : 'Membership',
@@ -532,6 +537,16 @@ export default function PortalOwner() {
   const classes = TODAY_SCHEDULE.filter((s) => s.classId).length
   const pt = TODAY_SCHEDULE.filter((s) => !s.classId).length
   const newEnquiries = countNewEnquiries()
+  /** Bumped whenever the enquiries store changes — re-reads merged cloud counts. */
+  const [, bumpEnquiries] = useReducer((x: number) => x + 1, 0)
+
+  useEffect(() => {
+    const onChange = () => bumpEnquiries()
+    window.addEventListener(ENQUIRIES_CHANGED_EVENT, onChange)
+    // Pull the real cloud count once on mount; badges update via the event.
+    void refreshCloudEnquiries()
+    return () => window.removeEventListener(ENQUIRIES_CHANGED_EVENT, onChange)
+  }, [])
 
   return (
     <div className="space-y-6 md:space-y-8">

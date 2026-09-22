@@ -4,12 +4,17 @@ import { Check, Copy, Download, Inbox, MessageCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   ENQUIRIES_CHANGED_EVENT,
+  ENQUIRY_STATUSES,
+  STATUS_LABELS,
+  assignEnquiry,
   exportCsv,
-  fetchCloudEnquiries,
-  listEnquiries,
-  markContacted,
+  fetchEnquiriesMerged,
+  refreshCloudEnquiries,
+  setEnquiryNotes,
+  setEnquiryStatus,
 } from '@/lib/enquiries'
 import type { Enquiry, EnquiryRoute } from '@/lib/enquiries'
+import { STAFF_PROFILES } from '@/lib/staff'
 
 type Filter = 'all' | EnquiryRoute | 'new'
 
@@ -95,7 +100,7 @@ function RoutePill({ route }: { route: EnquiryRoute }) {
 }
 
 export default function Enquiries() {
-  const [enquiries, setEnquiries] = useState<Enquiry[]>(() => listEnquiries())
+  const [enquiries, setEnquiries] = useState<Enquiry[]>(() => fetchEnquiriesMerged())
   const [filter, setFilter] = useState<Filter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -105,15 +110,8 @@ export default function Enquiries() {
   // or records saved before cloud mirroring existed). Dedupe by cloudId —
   // a local record whose cloud mirror landed IS its cloud row.
   const refresh = useCallback(async () => {
-    const local = listEnquiries()
-    const cloud = await fetchCloudEnquiries()
-    if (cloud.length === 0) {
-      setEnquiries(local)
-      return
-    }
-    const cloudIds = new Set(cloud.map((c) => c.cloudId))
-    const localOnly = local.filter((l) => !l.cloudId || !cloudIds.has(l.cloudId))
-    setEnquiries([...cloud, ...localOnly])
+    await refreshCloudEnquiries()
+    setEnquiries(fetchEnquiriesMerged())
   }, [])
 
   // Initial load + refresh when a submission lands (custom event from
@@ -286,10 +284,15 @@ export default function Enquiries() {
                   </h3>
                   <div className="mt-2 flex items-center gap-2">
                     <RoutePill route={selected.route} />
-                    {selected.status === 'contacted' && (
-                      <span className="text-[11px] uppercase tracking-[0.12em] text-vault-faint">
-                        Contacted
-                      </span>
+                    <span
+                      className={`text-[11px] uppercase tracking-[0.12em] ${
+                        selected.status === 'new' ? 'text-gold' : 'text-vault-faint'
+                      }`}
+                    >
+                      {STATUS_LABELS[selected.status]}
+                    </span>
+                    {selected.assignedTo && (
+                      <span className="text-[11px] text-vault-muted">→ {selected.assignedTo}</span>
                     )}
                   </div>
                 </div>
@@ -316,7 +319,72 @@ export default function Enquiries() {
                 </dl>
               </div>
 
-              <div className="space-y-3 border-t border-vault-border p-6">
+              <div className="space-y-4 border-t border-vault-border p-6">
+                {/* Pipeline status */}
+                <div>
+                  <p className="eyebrow mb-2">Pipeline</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ENQUIRY_STATUSES.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setEnquiryStatus(selected.id, s)
+                          void refresh()
+                        }}
+                        aria-pressed={selected.status === s}
+                        className={`border px-2.5 py-1.5 text-[10px] uppercase tracking-[0.12em] transition-colors ${
+                          selected.status === s
+                            ? s === 'cold'
+                              ? 'border-vault-border bg-white/[0.06] text-vault-muted'
+                              : 'border-gold bg-gold/10 text-gold'
+                            : 'border-vault-border text-vault-muted hover:border-white/30 hover:text-white'
+                        }`}
+                      >
+                        {STATUS_LABELS[s]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Assignment */}
+                <label className="block">
+                  <span className="eyebrow">Assigned to</span>
+                  <select
+                    value={selected.assignedTo ?? ''}
+                    onChange={(e) => {
+                      assignEnquiry(selected.id, e.target.value)
+                      void refresh()
+                    }}
+                    className="mt-1.5 w-full border border-vault-border bg-vault-bg px-3 py-2.5 text-[13px] text-white focus:border-gold focus:outline-none"
+                  >
+                    <option value="">Unassigned</option>
+                    {STAFF_PROFILES.map((p) => (
+                      <option key={p.id} value={p.name}>
+                        {p.name} — {p.roleLabel}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {/* Notes */}
+                <label className="block">
+                  <span className="eyebrow">Notes</span>
+                  <textarea
+                    key={`notes-${selected.id}`}
+                    defaultValue={selected.notes ?? ''}
+                    onBlur={(e) => {
+                      if (e.target.value !== (selected.notes ?? '')) {
+                        setEnquiryNotes(selected.id, e.target.value)
+                        void refresh()
+                      }
+                    }}
+                    rows={3}
+                    placeholder="Follow-up details, promises made, next step…"
+                    className="mt-1.5 w-full resize-y border border-vault-border bg-vault-bg px-3 py-2.5 text-[13px] text-white placeholder:text-vault-faint focus:border-gold focus:outline-none"
+                  />
+                </label>
+
                 <div className="grid grid-cols-2 gap-3">
                   {whatsappHref(selected) ? (
                     <a
@@ -341,15 +409,6 @@ export default function Enquiries() {
                     {copied ? 'Copied' : 'Copy details'}
                   </button>
                 </div>
-                {selected.status === 'new' && (
-                  <button
-                    type="button"
-                    onClick={() => markContacted(selected.id)}
-                    className="w-full border border-gold/60 px-4 py-3 text-[12px] uppercase tracking-[0.08em] text-gold transition-colors hover:bg-gold/10"
-                  >
-                    Mark as contacted
-                  </button>
-                )}
               </div>
             </motion.aside>
           </>
