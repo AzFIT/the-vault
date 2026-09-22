@@ -273,7 +273,7 @@ function KpiRow() {
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: i * 0.07, ease: 'easeOut' }}
-            className={`app-card p-5 text-left transition-colors hover:border-white/40 ${c.gold ? 'border-gold/50' : ''}`}
+            className={`app-card p-5 text-left transition-colors hover:border-[rgba(212,175,55,0.4)] ${c.gold ? 'border-gold !bg-gold/[0.07] shadow-[0_0_24px_rgba(212,175,55,0.15)]' : ''}`}
           >
             <p className="text-[11px] uppercase tracking-[0.16em] text-vault-muted">{c.label}</p>
             <p className={`tnum mt-3 text-[26px] font-bold leading-none md:text-[30px] ${c.gold ? 'text-gold' : 'text-white'}`}>
@@ -425,20 +425,26 @@ function RiskPanel() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: i * 0.07 }}
-            className={`border-l-2 p-4 ${r.level === 'High' ? 'border-[#ff6b6b]' : 'border-gold'}`}
+            className={`border-l-2 p-4 ${r.level === 'High' ? 'border-[#7a2e2e] bg-[#7a2e2e]/10' : 'border-[#b8a26a]/70 bg-[#b8a26a]/[0.06]'}`}
           >
             <p className="flex flex-wrap items-center gap-2 text-[14px] font-medium text-white">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-vault-surface-3 text-[9px] text-vault-muted">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-gold/40 bg-gold/10 text-[9px] text-gold">
                 {r.initials}
               </span>
               {r.name}
               <span
                 className={`px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] ${
-                  r.level === 'High' ? 'border border-[#ff6b6b] text-[#ff6b6b]' : 'border border-gold text-gold'
+                  r.level === 'High' ? 'border border-[#7a2e2e] text-[#c79494]' : 'border border-[#b8a26a]/70 text-[#b8a26a]'
                 }`}
               >
                 {r.level}
               </span>
+              <Link
+                to="/portal/clients"
+                className="ml-auto text-[11px] uppercase tracking-[0.1em] text-gold transition-colors hover:underline"
+              >
+                View
+              </Link>
             </p>
             <ul className="mt-2 space-y-1">
               {r.reasons.map((reason) => (
@@ -466,9 +472,10 @@ function Rail() {
       count: newEnquiries,
       note: 'membership · trial — reply via CRM',
       link: '/admin/enquiries',
+      chipCls: 'bg-gold text-black',
     },
-    { title: 'Memberships expiring', count: 2, note: 'within 14 days — send renewal' },
-    { title: 'Failed payments', count: 1, note: 'autopay retry tomorrow' },
+    { title: 'Memberships expiring', count: 2, note: 'within 14 days — send renewal', chipCls: 'bg-[#8a6d1e] text-black' },
+    { title: 'Failed payments', count: 1, note: 'autopay retry tomorrow', chipCls: 'bg-[#7a2e2e] text-[#f0d8d8]' },
   ]
 
   return (
@@ -481,11 +488,7 @@ function Rail() {
               <p className="flex items-center justify-between text-[13px] font-medium text-white">
                 {n.title}
                 {n.count > 0 && (
-                  <span
-                    className={`px-1.5 text-[10px] font-bold leading-tight ${
-                      n.title === 'New enquiries' ? 'bg-gold text-black' : 'bg-[#ff6b6b] text-black'
-                    }`}
-                  >
+                  <span className={`px-1.5 text-[10px] font-bold leading-tight ${n.chipCls}`}>
                     {n.count}
                   </span>
                 )}
@@ -512,7 +515,7 @@ function Rail() {
           {YESTERDAY.map((r) => (
             <li key={r.label} className="flex items-baseline justify-between">
               <span>{r.label}</span>
-              <b className="tnum text-white">{r.value}</b>
+              <b className="tnum text-gold">{r.value}</b>
             </li>
           ))}
         </ul>
@@ -533,8 +536,8 @@ export default function PortalOwner() {
   return (
     <div className="space-y-6 md:space-y-8">
       <div>
-        <p className="eyebrow">Owner portal</p>
-        <h2 className="mt-1 text-2xl font-bold text-white md:text-3xl">
+        <p className="section-head">Owner portal</p>
+        <h2 className="h-display mt-2 text-2xl md:text-3xl" style={{ color: 'var(--gold)' }}>
           {greeting()}, Dan
         </h2>
         <p className="mt-1 text-[13px] text-vault-muted">

@@ -6,6 +6,8 @@ import './index.css'
 import './tokens.css'
 // Phase 2 marketing theme (homepage re-theme) — also `.tv2`-scoped.
 import './marketing-theme.css'
+// Phase 3 portal theme (owner & staff re-skin) — `.tv2`-scoped var remap.
+import './portal-theme.css'
 import App from './App.tsx'
 
 // Vite BASE_URL follows `base` in vite.config.ts: './' locally (→ ''),

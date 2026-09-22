@@ -51,7 +51,7 @@ const COLLAPSE_KEY = 'vault-sidebar-collapsed'
 function navCls(isActive: boolean, collapsed: boolean) {
   return `relative flex w-full items-center gap-3 px-3 py-2.5 text-left text-[13px] transition-colors ${
     collapsed ? 'justify-center px-0' : ''
-  } ${isActive ? 'bg-white/[0.08] text-white' : 'text-vault-muted hover:bg-white/[0.04] hover:text-white'}`
+  } ${isActive ? 'bg-gold/10 text-gold' : 'text-vault-muted hover:bg-white/[0.04] hover:text-[color:var(--vault-ink)]'}`
 }
 
 function NavEntry({ item, badge, collapsed }: { item: DeskNavItem; badge?: number; collapsed: boolean }) {
@@ -126,8 +126,8 @@ function SidebarContent({
   return (
     <>
       <div className={`flex items-center gap-3 border-b border-vault-border px-2 pb-4 pt-1 ${collapsed ? 'justify-center' : ''}`}>
-        <img src={asset('brand/vault-logo-mark.png')} alt="The Vault" className="h-8 w-auto shrink-0 object-contain" />
-        {!collapsed && <span className="text-[13px] font-bold uppercase tracking-[0.18em]">The Vault</span>}
+        <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="The Vault" className="h-8 w-auto shrink-0 object-contain" />
+        {!collapsed && <span className="brand-logo__wordmark !text-[11px]">The Vault Fitness</span>}
       </div>
       {!collapsed && <p className="px-3 pb-1 pt-4 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Today</p>}
       {collapsed && <div className="pt-3" />}
@@ -159,7 +159,7 @@ function SidebarContent({
       <div className="mt-auto">
         {!collapsed ? (
           <div className="flex items-center gap-3 border-t border-vault-border px-2 pt-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gold/50 bg-gold/10 text-[11px] text-gold">
               {profile?.initials}
             </span>
             <div className="min-w-0 flex-1">
@@ -181,7 +181,7 @@ function SidebarContent({
         ) : (
           <div className="flex flex-col items-center gap-2 border-t border-vault-border pt-3">
             <span
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-gold/50 bg-gold/10 text-[11px] text-gold"
               title={`${profile?.name} · ${profile?.roleLabel}`}
             >
               {profile?.initials}
@@ -245,7 +245,7 @@ export default function FrontDeskShell() {
     })
 
   return (
-    <div className="app-black min-h-[100dvh] bg-vault-bg text-white">
+    <div className="app-black tv2 min-h-[100dvh] bg-vault-bg text-white">
       <div className="flex">
         {/* Sidebar — collapsible on desktop, hidden on mobile (drawer below) */}
         <aside
@@ -290,13 +290,13 @@ export default function FrontDeskShell() {
               aria-label="The Vault Fitness — home"
               className="absolute left-1/2 hidden -translate-x-1/2 md:block"
             >
-              <img src={asset('brand/vault-logo-mark.png')} alt="" className="h-8 w-auto object-contain" />
+              <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="" className="h-8 w-auto object-contain" />
             </Link>
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
-              className="flex h-8 w-8 items-center justify-center border border-vault-border text-vault-muted hover:text-white lg:hidden"
+              className="flex h-8 w-8 items-center justify-center border border-vault-border text-vault-muted hover:text-[color:var(--gold)] lg:hidden"
             >
               <Menu className="h-4 w-4" strokeWidth={1.5} />
             </button>
@@ -308,7 +308,7 @@ export default function FrontDeskShell() {
             <span className="ml-auto hidden border border-gold/50 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-gold sm:inline-block">
               Tester mode — signed in as {profile.name}
             </span>
-            <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 text-[11px] text-vault-muted sm:flex">
+            <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-gold/50 bg-gold/10 text-[11px] text-gold sm:flex">
               {profile.initials}
             </span>
           </header>

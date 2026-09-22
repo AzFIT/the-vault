@@ -28,7 +28,7 @@ export default function PortalLogin() {
   }
 
   return (
-    <div className="app-black grid min-h-[100dvh] bg-vault-bg text-white lg:grid-cols-2">
+    <div className="app-black tv2 grid min-h-[100dvh] bg-vault-bg text-white lg:grid-cols-2">
       {/* Brand panel */}
       <div className="flex flex-col justify-between border-b border-vault-border p-8 md:p-12 lg:border-b-0 lg:border-r">
         <div>

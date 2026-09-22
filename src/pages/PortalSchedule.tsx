@@ -39,16 +39,16 @@ for (let m = GRID_START_MIN; m < GRID_END_MIN; m += 60) HOURS.push(m)
 function blockCls(type: BlockType) {
   switch (type) {
     case 'pt':
-      return 'border-gold/70 bg-gold/10'
+      return 'border-gold bg-gold/90 hover:brightness-110'
     case 'class':
-      return 'border-white/40 bg-white/[0.04]'
+      return 'border-[rgba(212,175,55,0.25)] bg-gold/[0.06]'
     case 'open':
-      return 'border-dashed border-vault-faint/70 bg-transparent'
+      return 'border-dashed border-gold/50 bg-transparent'
   }
 }
 
 function blockTitleCls(type: BlockType) {
-  return type === 'pt' ? 'text-gold' : type === 'class' ? 'text-white' : 'text-vault-muted'
+  return type === 'pt' ? 'text-black' : type === 'class' ? 'text-white' : 'text-vault-muted'
 }
 
 function blockSub(block: ScheduleBlock): string {
@@ -175,7 +175,7 @@ export default function PortalSchedule() {
           <p className="eyebrow">Operate · Schedule</p>
           <h2 className="mt-1 text-2xl font-bold text-white">Schedule</h2>
           <p className="mt-1 text-[13px] text-vault-muted">
-            Gold = revenue-bearing 1:1/2:1 · white = group class · dashed = bookable open slot.
+            Gold = revenue-bearing 1:1/2:1 · outlined = group class · dashed gold = bookable open slot.
           </p>
         </div>
         <button
@@ -251,7 +251,7 @@ export default function PortalSchedule() {
             >
               <span
                 className={`h-2.5 w-2.5 ${
-                  t === 'pt' ? 'border border-gold bg-gold/30' : t === 'class' ? 'border border-white/60' : 'border border-dashed border-vault-faint'
+                  t === 'pt' ? 'border border-gold bg-gold/30' : t === 'class' ? 'border border-[rgba(216,216,220,0.45)]' : 'border border-dashed border-gold/50'
                 }`}
               />
               {BLOCK_TYPE_LABELS[t]}
@@ -336,8 +336,8 @@ export default function PortalSchedule() {
       {/* Legends */}
       <div className="flex flex-wrap gap-x-8 gap-y-2 text-[11px] text-vault-faint">
         <p>
-          <span className="text-vault-muted">Colour coding</span> — gold blocks are revenue-bearing
-          1:1/2:1 sessions, white blocks are group classes, dashed blocks are bookable open slots.
+          <span className="text-vault-muted">Colour coding</span> — solid gold blocks are revenue-bearing
+          1:1/2:1 sessions, hairline-outlined blocks are group classes, dashed gold blocks are bookable open slots.
         </p>
         <p>
           <span className="text-vault-muted">Grid click</span> — click any empty time slot to create a

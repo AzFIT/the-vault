@@ -1,0 +1,138 @@
+/* ===========================================================================
+ * THE VAULT FITNESS — PORTAL THEME (Phase 3: owner & staff portal re-skin)
+ * Source: the-vault-design-pack/prompts/the-vault-kimi-work-prompts-all-phases.txt
+ *
+ * HOW IT WORKS: the portal pages were built on the `--vault-*` CSS variable
+ * ramp plus a handful of literal utility colors. Instead of rewriting every
+ * class string (high risk to working functionality), this file remaps those
+ * variables to the Phase 1 token values under the `.tv2` scope and redirects
+ * the few literal whites/status colors. It is loaded AFTER index.css and its
+ * rules are unlayered, so they win over Tailwind's layered utilities.
+ * Reverting Phase 3 removes this file + the small code edits — portal
+ * functionality is untouched.
+ * =========================================================================== */
+
+/* ---- 1) Vault ramp → Phase 1 tokens ---- */
+.tv2 {
+  --vault-bg: #0d0d0f;
+  --vault-surface: #17181b;
+  --vault-surface-2: #1d1e22;
+  --vault-surface-3: #26272b;
+  --vault-border: rgba(212, 175, 55, 0.15);
+  --vault-ink: #d8d8dc;
+  --vault-muted: #9a9a9e;
+  --vault-faint: #6e6e73;
+  /* Gold fills carry black text now */
+  --vault-btn-text: #000000;
+  --vault-btn-hover: #e8c766;
+
+  /* shadcn HSL ramp (cards/popovers/inputs used by portal components) */
+  --background: 240 7% 5%;
+  --foreground: 240 4% 86%;
+  --card: 228 9% 10%;
+  --card-foreground: 240 4% 86%;
+  --popover: 228 9% 10%;
+  --popover-foreground: 240 4% 86%;
+  --secondary: 225 7% 14%;
+  --secondary-foreground: 240 4% 86%;
+  --muted: 225 7% 14%;
+  --muted-foreground: 240 3% 62%;
+  --accent: 225 7% 18%;
+  --accent-foreground: 240 4% 86%;
+  --border: 42 22% 20%;
+  --input: 42 22% 20%;
+  --sidebar-background: 228 9% 10%;
+  --sidebar-accent: 225 7% 14%;
+  --sidebar-border: 42 22% 20%;
+}
+
+/* ---- 2) Pure white → token text; white fills → solid gold ---- */
+.tv2 .text-white {
+  color: var(--vault-ink);
+}
+.tv2 .bg-white {
+  background: var(--gold);
+  color: #000;
+}
+.tv2 .text-vault-btn-text {
+  color: #000;
+}
+/* white borders become hairline-gold (structure, not accents) */
+.tv2 .border-white {
+  border-color: rgba(212, 175, 55, 0.4);
+}
+.tv2 .border-white\/30 {
+  border-color: rgba(212, 175, 55, 0.2);
+}
+.tv2 .border-white\/40 {
+  border-color: rgba(212, 175, 55, 0.25);
+}
+.tv2 .border-white\/50 {
+  border-color: rgba(212, 175, 55, 0.3);
+}
+.tv2 .border-white\/60 {
+  border-color: rgba(212, 175, 55, 0.35);
+}
+.tv2 .border-white\/70 {
+  border-color: rgba(212, 175, 55, 0.4);
+}
+/* hover-to-white becomes hover-to-gold across portal chrome */
+.tv2 .hover\:text-white:hover {
+  color: var(--gold);
+}
+.tv2 .hover\:border-white:hover {
+  border-color: rgba(212, 175, 55, 0.4);
+}
+.tv2 .hover\:border-white\/40:hover {
+  border-color: rgba(212, 175, 55, 0.35);
+}
+.tv2 .hover\:border-white\/60:hover {
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
+/* ---- 3) Status literals → token status colors ---- */
+.tv2 .text-\[\#ff6b6b\] {
+  color: #c79494;
+}
+.tv2 .border-\[\#ff6b6b\] {
+  border-color: rgba(122, 46, 46, 0.9);
+}
+.tv2 .bg-\[\#ff6b6b\] {
+  background: #7a2e2e;
+  color: #f0d8d8;
+}
+.tv2 .text-\[\#e06565\] {
+  color: #c79494;
+}
+.tv2 .text-\[\#7ec98f\] {
+  color: #8fc7a0;
+}
+.tv2 .border-\[\#7ec98f\] {
+  border-color: rgba(46, 93, 58, 0.9);
+}
+.tv2 .bg-\[\#7ec98f\] {
+  background: #2e5d3a;
+}
+.tv2 .border-\[\#7ec98f\]\/50 {
+  border-color: rgba(46, 93, 58, 0.55);
+}
+
+/* ---- 4) App cards adopt the token card ---- */
+.tv2 .app-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---- 5) Native select dropdowns stay dark ---- */
+.tv2 select option {
+  background: #17181b;
+  color: #d8d8dc;
+}
+
+/* ---- 6) Sub-text on solid-gold schedule blocks reads black ---- */
+.tv2 .bg-gold\/90 .text-vault-muted,
+.tv2 .bg-gold\/90 .text-vault-faint {
+  color: rgba(0, 0, 0, 0.65);
+}
