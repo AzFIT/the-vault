@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { asset } from '@/lib/utils'
 import { Facebook, Instagram, Menu, X } from 'lucide-react'
+import ContactLauncher from './enquiry/ContactLauncher'
 
 const NAV_LINKS = [
   { label: 'The Gym', to: '/#the-gym' },
@@ -21,6 +22,7 @@ const NAV_LINKS = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [contactOpen, setContactOpen] = useState(false)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
@@ -79,6 +81,13 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-4 md:gap-5">
+          <button
+            onClick={() => setContactOpen(true)}
+            className="hidden text-[13px] uppercase tracking-[0.12em] md:inline"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Contact
+          </button>
           <Link
             to="/portal/login"
             className="hidden text-[13px] uppercase tracking-[0.12em] md:inline"
@@ -161,6 +170,16 @@ export default function Navbar() {
                 <Link to="/#memberships" onClick={() => setOpen(false)} className="btn-gold w-full">
                   Join Now
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false)
+                    setContactOpen(true)
+                  }}
+                  className="btn-outline w-full !border-gold/60 !text-gold"
+                >
+                  Contact
+                </button>
                 <div className="flex gap-6">
                   <Link to="/portal/login" onClick={() => setOpen(false)} className="nav-link">
                     Staff
@@ -174,6 +193,9 @@ export default function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Contact launcher — same popup on desktop and mobile */}
+      <ContactLauncher open={contactOpen} onClose={() => setContactOpen(false)} />
     </header>
   )
 }

@@ -10,7 +10,7 @@
  */
 import { useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, CalendarCheck, Check, CreditCard, Dumbbell, MessageCircle, Printer } from 'lucide-react'
 import { submitEnquiry } from '@/lib/enquiries'
@@ -1252,7 +1252,12 @@ const MODE_SUBTITLES: Record<IntakeMode, string> = {
 }
 
 export default function Intake() {
-  const [mode, setMode] = useState<IntakeMode>('choose')
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<IntakeMode>(() => {
+    // Deep-link from the navbar Contact launcher (/intake?mode=…)
+    const m = searchParams.get('mode')
+    return m === 'contact' || m === 'membership' || m === 'training' || m === 'trial' ? m : 'choose'
+  })
 
   const backToChooser = () => {
     setMode('choose')
