@@ -38,13 +38,13 @@ const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
 const NAV_OPERATE: PortalNavItem[] = [
   { label: 'Dashboard', to: '/portal' },
   { label: 'Schedule', to: '/portal/schedule' },
-  { label: 'Check In', soon: true },
+  { label: 'Check In', to: '/portal/check-in' },
   { label: 'Rooms', soon: true },
 ]
 const NAV_GROW: PortalNavItem[] = [
   { label: 'Clients', to: '/portal/clients' },
   { label: 'Enquiries', to: '/admin/enquiries' },
-  { label: 'Point of Sale', soon: true },
+  { label: 'Point of Sale', to: '/portal/pos' },
   { label: 'Insights', to: '/portal/insights' },
   { label: 'Marketing', soon: true },
 ]

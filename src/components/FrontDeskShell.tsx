@@ -210,10 +210,11 @@ export default function FrontDeskShell() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Guard: front desk only. Everyone else gets bounced to their own surface.
+  // Guard: front desk + owner only. Owners oversee everything (Check In / POS
+  // are linked from the owner nav); everyone else gets bounced to their surface.
   useEffect(() => {
     if (!profile) navigate('/portal/login', { replace: true })
-    else if (profile.role !== 'front-desk') navigate(profile.home, { replace: true })
+    else if (profile.role !== 'front-desk' && profile.role !== 'owner') navigate(profile.home, { replace: true })
   }, [profile, navigate])
 
   useEffect(() => {
