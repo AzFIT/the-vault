@@ -6,6 +6,7 @@ import { asset } from '@/lib/utils'
 import { toast } from 'sonner'
 import { isEmail } from '@/lib/validation'
 import { subscribeNewsletter } from '@/lib/enquiries'
+import ContactLauncher from './enquiry/ContactLauncher'
 
 const GYM_LINKS = [
   { label: 'Monthly Gym Membership', to: '/#memberships' },
@@ -15,11 +16,11 @@ const GYM_LINKS = [
   { label: 'Gym Memberships', to: '/#memberships' },
 ]
 
-// External links to the live thevault-fitness.com site.
+// External links to the live thevault-fitness.com site. ("Contact Us" is
+// deliberately not here — it opens the ContactLauncher popup instead, see below.)
 const HELP_LINKS = [
   { label: 'Refer a Friend', href: 'https://thevault-fitness.com/pages/refer-a-friend-get-2-months-free' },
   { label: 'About Us', href: 'https://thevault-fitness.com/pages/about-us' },
-  { label: 'Contact Us', href: 'https://thevault-fitness.com/pages/contact-us' },
   { label: 'Membership Rules', href: 'https://thevault-fitness.com/pages/membership-rules-guidelines' },
   { label: 'Privacy Policy', href: 'https://thevault-fitness.com/policies/privacy-policy' },
   { label: 'T&Cs', href: 'https://thevault-fitness.com/policies/terms-of-service' },
@@ -30,6 +31,7 @@ const HELP_LINKS = [
 export default function Footer() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [contactOpen, setContactOpen] = useState(false)
 
   const subscribe = (e: FormEvent) => {
     e.preventDefault()
@@ -117,6 +119,15 @@ export default function Footer() {
           <div>
             <p className="section-head mb-5">Help</p>
             <ul className="space-y-2.5">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setContactOpen(true)}
+                  className="footer-link cursor-pointer"
+                >
+                  Contact Us
+                </button>
+              </li>
               {HELP_LINKS.map((l) => (
                 <li key={l.label}>
                   <a href={l.href} target="_blank" rel="noopener noreferrer" className="footer-link">
@@ -188,6 +199,9 @@ export default function Footer() {
           </p>
         </div>
       </div>
+
+      {/* Same Contact popup as the navbar — footer Contact Us entry */}
+      <ContactLauncher open={contactOpen} onClose={() => setContactOpen(false)} />
     </footer>
   )
 }
