@@ -33,6 +33,7 @@ const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
   '/portal/clients': { eyebrow: 'Grow', title: 'Clients' },
   '/portal/schedule': { eyebrow: 'Operate', title: 'Schedule' },
   '/portal/insights': { eyebrow: 'Grow', title: 'Revenue & performance' },
+  '/portal/settings': { eyebrow: 'Manage', title: 'Settings' },
 }
 
 const NAV_OPERATE: PortalNavItem[] = [
@@ -51,7 +52,7 @@ const NAV_GROW: PortalNavItem[] = [
 const NAV_MANAGE: PortalNavItem[] = [
   { label: 'Services & Products', soon: true },
   { label: 'Staff', to: '/portal/staff' },
-  { label: 'Settings', soon: true },
+  { label: 'Settings', to: '/portal/settings' },
 ]
 
 const COLLAPSE_KEY = 'vault-sidebar-collapsed'
