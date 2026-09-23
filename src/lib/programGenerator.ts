@@ -14,6 +14,12 @@ import { findContraindications, normalizeLimitation } from '@/lib/exerciseSafety
 export type GoalId = 'fat_loss' | 'muscle' | 'strength' | 'recomposition' | 'performance' | 'general'
 export type ExperienceId = 'beginner' | 'intermediate' | 'advanced'
 export type EquipmentId = 'full' | 'dumbbells' | 'home' | 'bodyweight'
+export type MethodId =
+  | 'straight' | 'supersets' | 'trisets' | 'giant' | 'circuit' | 'gvt' | 'pyramid'
+  | 'cluster' | 'dropset' | 'restpause' | 'wave' | 'ladder' | 'fivebyfive' | 'structural'
+  | 'circuitcond' | 'hiit' | 'intervals' | 'fartlek' | 'sprint' | 'tabata'
+  | 'amrap' | 'emom' | 'gbc' | 'strongman'
+  | 'functional' | 'skill' | 'agility' | 'sport' | 'olympic' | 'plyo' | 'powerlifting' | 'performance'
 
 export interface GeneratorInput {
   goal: GoalId
@@ -21,6 +27,12 @@ export interface GeneratorInput {
   frequency: 2 | 3 | 4 // builder has 5 day columns — capped at 4
   equipment: EquipmentId
   injuries?: string // free text, comma-separated
+  /** Training method — drives pairing notation (A1/A2…), set/rep/rest presets, slot rotation. */
+  method?: MethodId
+  /** How many exercises each generated session should hold (3–8). */
+  exercisesPerSession?: number
+  /** Program length in weeks (2–8). Week 1 is generated; later weeks are clones. */
+  weeks?: number
 }
 
 export interface GeneratedExercise {
@@ -30,6 +42,8 @@ export interface GeneratedExercise {
   kg: number // left at 0 — the coach sets working loads
   rpe: number
   rest: number // seconds, from goal rules — the coach can override
+  /** Poliquin block notation, e.g. A / A1 / A2 — auto-assigned from the method. */
+  notation?: string
 }
 
 export interface GeneratedSession {
@@ -44,7 +58,8 @@ export interface GeneratedProgram {
   name: string
   goalLabel: string
   experienceLabel: string
-  weeks: GeneratedWeek[] // 4 weeks; weeks 2–4 are clones (progression is Phase 4)
+  methodLabel: string
+  weeks: GeneratedWeek[] // week 1 generated; weeks 2+ are clones (progression is Phase 4)
   warnings: string[]
 }
 
@@ -170,109 +185,104 @@ const PLACEMENT: Record<number, number[]> = {
   4: [0, 1, 3, 4],
 }
 
-interface SlotSpec {
-  slot: Slot
-  count: number
+/** Session titles per frequency (structure stays; slots come from rotations). */
+const SESSION_TITLES: Record<number, string[]> = {
+  2: ['Full Body A', 'Full Body B'],
+  3: ['Full Body 1', 'Full Body 2', 'Full Body 3'],
+  4: ['Upper A', 'Lower A', 'Upper B', 'Lower B'],
 }
 
-/** Session templates per frequency: title + which slots (and how many picks each). */
-const SPLIT_TEMPLATES: Record<number, { title: string; slots: SlotSpec[] }[]> = {
-  2: [
-    {
-      title: 'Full Body A',
-      slots: [
-        { slot: 'pressing', count: 2 },
-        { slot: 'posterior', count: 1 },
-        { slot: 'bilateral_quad', count: 1 },
-        { slot: 'bracing', count: 1 },
-      ],
-    },
-    {
-      title: 'Full Body B',
-      slots: [
-        { slot: 'pulling', count: 2 },
-        { slot: 'unilateral_quad', count: 1 },
-        { slot: 'bracing', count: 1 },
-        { slot: 'biceps', count: 1 },
-      ],
-    },
-  ],
-  3: [
-    {
-      title: 'Full Body 1',
-      slots: [
-        { slot: 'pressing', count: 2 },
-        { slot: 'posterior', count: 1 },
-        { slot: 'bilateral_quad', count: 1 },
-        { slot: 'bracing', count: 1 },
-      ],
-    },
-    {
-      title: 'Full Body 2',
-      slots: [
-        { slot: 'pulling', count: 2 },
-        { slot: 'unilateral_quad', count: 1 },
-        { slot: 'bracing', count: 1 },
-        { slot: 'biceps', count: 1 },
-      ],
-    },
-    {
-      title: 'Full Body 3',
-      slots: [
-        { slot: 'pressing', count: 1 },
-        { slot: 'pulling', count: 1 },
-        { slot: 'posterior', count: 1 },
-        { slot: 'bracing', count: 1 },
-        { slot: 'metcon', count: 1 },
-      ],
-    },
-  ],
-  4: [
-    {
-      title: 'Upper A',
-      slots: [
-        { slot: 'pressing', count: 2 },
-        { slot: 'pulling', count: 2 },
-        { slot: 'delt_scap', count: 1 },
-      ],
-    },
-    {
-      title: 'Lower A',
-      slots: [
-        { slot: 'bilateral_quad', count: 1 },
-        { slot: 'unilateral_quad', count: 1 },
-        { slot: 'posterior', count: 2 },
-        { slot: 'bracing', count: 1 },
-      ],
-    },
-    {
-      title: 'Upper B',
-      slots: [
-        { slot: 'pressing', count: 1 },
-        { slot: 'pulling', count: 1 },
-        { slot: 'biceps', count: 1 },
-        { slot: 'triceps', count: 1 },
-        { slot: 'delt_scap', count: 1 },
-      ],
-    },
-    {
-      title: 'Lower B',
-      slots: [
-        { slot: 'bilateral_quad', count: 2 },
-        { slot: 'posterior', count: 1 },
-        { slot: 'bracing', count: 1 },
-        { slot: 'target_areas', count: 1 },
-      ],
-    },
-  ],
-}
+/** Slot rotations — ordered buckets to pick from, truncated to exercisesPerSession. */
+const ROTATIONS = {
+  fullBody: ['pressing', 'pulling', 'posterior', 'bilateral_quad', 'bracing', 'unilateral_quad', 'delt_scap', 'biceps', 'triceps', 'target_areas'] as Slot[],
+  upper: ['pressing', 'pulling', 'pressing', 'pulling', 'delt_scap', 'biceps', 'triceps', 'target_areas'] as Slot[],
+  lower: ['bilateral_quad', 'posterior', 'unilateral_quad', 'posterior', 'bracing', 'bilateral_quad', 'target_areas'] as Slot[],
+  metconFirst: ['metcon', 'plyo', 'bilateral_quad', 'posterior', 'bracing', 'pressing', 'pulling', 'unilateral_quad'] as Slot[],
+  powerFirst: ['power', 'bilateral_quad', 'posterior', 'pressing', 'pulling', 'delt_scap', 'bracing'] as Slot[],
+  plyoFirst: ['plyo', 'bilateral_quad', 'unilateral_quad', 'pressing', 'pulling', 'posterior', 'bracing'] as Slot[],
+} satisfies Record<string, Slot[]>
 
 const CONDITIONING_RE = /erg|sled|ski|bike|run|row(ing)? machine|airdyne|assault|shuttle|jump rope|farmer|carry|burpee/
+
+// ---- training methods ------------------------------------------------------
+
+type NotationMode = 'letter' | 'pair' | 'trio' | 'circuit' | 'none'
+
+interface MethodDef {
+  label: string
+  group: 'strength' | 'conditioning' | 'performance'
+  /** How Poliquin notation is auto-assigned. */
+  notation: NotationMode
+  /** Suggested exercise count per session when this method is picked. */
+  defaultCount: number
+  /** Slot rotation override (defaults to the frequency-based one). */
+  rotation?: keyof typeof ROTATIONS
+  sets?: number
+  reps?: number
+  /** Rest override (seconds) — otherwise the goal's rest range is used. */
+  rest?: number
+  rpe?: number
+  note?: string
+}
+
+export const GENERATOR_METHODS: Record<MethodId, MethodDef> = {
+  straight:     { label: 'Straight Sets', group: 'strength', notation: 'letter', defaultCount: 5 },
+  supersets:    { label: 'Supersets', group: 'strength', notation: 'pair', defaultCount: 6, rest: 75 },
+  trisets:      { label: 'Trisets', group: 'strength', notation: 'trio', defaultCount: 6, rest: 90 },
+  giant:        { label: 'Giant Sets', group: 'strength', notation: 'circuit', defaultCount: 6, sets: 3, rest: 150 },
+  circuit:      { label: 'Circuits', group: 'strength', notation: 'circuit', defaultCount: 6, sets: 3, rest: 45 },
+  gvt:          { label: 'German Volume Training (10×10)', group: 'strength', notation: 'pair', defaultCount: 4, sets: 10, reps: 10, rest: 60, note: '10 sets × 10 reps per exercise — high volume' },
+  pyramid:      { label: 'Pyramid Sets', group: 'strength', notation: 'letter', defaultCount: 5, sets: 5, reps: 8, rest: 90 },
+  cluster:      { label: 'Cluster Sets', group: 'strength', notation: 'letter', defaultCount: 5, sets: 4, reps: 4, rest: 30 },
+  dropset:      { label: 'Drop Sets', group: 'strength', notation: 'letter', defaultCount: 5, sets: 3, reps: 10, rest: 45 },
+  restpause:    { label: 'Rest-Pause', group: 'strength', notation: 'letter', defaultCount: 5, sets: 3, reps: 6, rest: 20 },
+  wave:         { label: 'Wave Loading', group: 'strength', notation: 'letter', defaultCount: 5, sets: 3, reps: 3, rest: 180 },
+  ladder:       { label: '5-4-3-2-1 Ladder', group: 'strength', notation: 'letter', defaultCount: 4, sets: 5, reps: 5, rest: 120 },
+  fivebyfive:   { label: '5×5 Strength', group: 'strength', notation: 'letter', defaultCount: 5, sets: 5, reps: 5, rest: 180 },
+  structural:   { label: 'Structural Balance', group: 'strength', notation: 'pair', defaultCount: 6, sets: 3, reps: 12, rest: 60 },
+  circuitcond:  { label: 'Circuit Conditioning', group: 'conditioning', notation: 'circuit', defaultCount: 6, sets: 3, reps: 1, rest: 45 },
+  hiit:         { label: 'HIIT', group: 'conditioning', notation: 'circuit', defaultCount: 5, sets: 8, reps: 1, rest: 60, rotation: 'metconFirst' },
+  intervals:    { label: 'Interval Training', group: 'conditioning', notation: 'circuit', defaultCount: 4, sets: 6, reps: 1, rest: 60, rotation: 'metconFirst' },
+  fartlek:      { label: 'Fartlek Training', group: 'conditioning', notation: 'circuit', defaultCount: 4, sets: 6, reps: 1, rest: 45, rotation: 'metconFirst' },
+  sprint:       { label: 'Sprint Intervals', group: 'conditioning', notation: 'circuit', defaultCount: 4, sets: 8, reps: 1, rest: 90, rotation: 'metconFirst' },
+  tabata:       { label: 'Tabata', group: 'conditioning', notation: 'circuit', defaultCount: 4, sets: 8, reps: 20, rest: 10 },
+  amrap:        { label: 'AMRAP', group: 'conditioning', notation: 'letter', defaultCount: 6, sets: 1, reps: 1, rest: 0, rotation: 'metconFirst' },
+  emom:         { label: 'EMOM', group: 'conditioning', notation: 'circuit', defaultCount: 5, sets: 10, reps: 1, rest: 60, rotation: 'metconFirst' },
+  gbc:          { label: 'GBC (German Body Composition)', group: 'conditioning', notation: 'pair', defaultCount: 6, sets: 3, reps: 12, rest: 45 },
+  strongman:    { label: 'Modified Strongman', group: 'conditioning', notation: 'circuit', defaultCount: 5, sets: 4, reps: 1, rest: 90, rotation: 'metconFirst' },
+  functional:   { label: 'Functional Training', group: 'performance', notation: 'circuit', defaultCount: 6, sets: 3, reps: 8, rest: 45 },
+  skill:        { label: 'Skill Work (Agility · Speed · Coordination)', group: 'performance', notation: 'letter', defaultCount: 4, sets: 3, reps: 5, rest: 60 },
+  agility:      { label: 'Speed & Agility Ladder Work', group: 'performance', notation: 'circuit', defaultCount: 4, sets: 6, reps: 1, rest: 60, rotation: 'metconFirst' },
+  sport:        { label: 'Sport-Specific Drills', group: 'performance', notation: 'letter', defaultCount: 5, sets: 4, reps: 6, rest: 90 },
+  olympic:      { label: 'Olympic Lifts', group: 'performance', notation: 'pair', defaultCount: 5, sets: 5, reps: 3, rest: 120, rotation: 'powerFirst' },
+  plyo:         { label: 'Plyometrics', group: 'performance', notation: 'letter', defaultCount: 5, sets: 4, reps: 5, rest: 90, rotation: 'plyoFirst' },
+  powerlifting: { label: 'Powerlifting', group: 'performance', notation: 'letter', defaultCount: 5, sets: 5, reps: 3, rest: 180 },
+  performance:  { label: 'Athletic Performance Block', group: 'performance', notation: 'circuit', defaultCount: 6, sets: 4, reps: 5, rest: 75 },
+}
+
+/** Auto-assign Poliquin notation from the method and exercise position. */
+function assignNotation(mode: NotationMode, index: number, count: number): string | undefined {
+  // Circuit: one continuous block for the whole session — A1, A2, A3…
+  if (mode === 'circuit') return `A${index + 1}`
+  if (mode === 'none') return undefined
+  const letter = String.fromCharCode(65 + Math.floor(index / (mode === 'trio' ? 3 : 2)))
+  if (mode === 'letter') return letter
+  const size = mode === 'trio' ? 3 : 2
+  const pos = index % size
+  const blockStart = Math.floor(index / size) * size
+  const inBlock = Math.min(size, count - blockStart)
+  // Odd trailing exercise stands alone as the next plain letter (A, B, …).
+  if (pos === inBlock - 1 && inBlock < size) return String.fromCharCode(65 + Math.floor(index / size))
+  return `${letter}${pos + 1}`
+}
 
 // ---- generator -------------------------------------------------------------
 
 export function generateProgram(input: GeneratorInput, library: LibraryExercise[]): GeneratedProgram {
   const goal = GOAL_PARAMS[input.goal]
+  const method = GENERATOR_METHODS[input.method ?? 'straight']
+  const exercisesPerSession = Math.min(8, Math.max(3, input.exercisesPerSession ?? method.defaultCount))
+  const weekCount = Math.min(8, Math.max(2, input.weeks ?? 4))
   const limitations = (input.injuries ?? '')
     .split(/[,;]/)
     .map(normalizeLimitation)
@@ -333,50 +343,58 @@ export function generateProgram(input: GeneratorInput, library: LibraryExercise[
 
   const buildWeek = (): GeneratedWeek => {
     const days: GeneratedWeek = Array.from({ length: DAY_COLUMN_COUNT }, () => null)
-    const sessions = SPLIT_TEMPLATES[input.frequency]
+    const titles = SESSION_TITLES[input.frequency]
     const columns = PLACEMENT[input.frequency]
-    sessions.forEach((template, i) => {
+    const baseRotation = input.frequency === 4 ? null : ROTATIONS.fullBody
+    titles.forEach((title, i) => {
+      const rotation =
+        method.rotation != null
+          ? ROTATIONS[method.rotation]
+          : input.frequency === 4
+            ? (i % 2 === 0 ? ROTATIONS.upper : ROTATIONS.lower)
+            : baseRotation!
+      const slots = rotation.slice(0, exercisesPerSession)
       const exercises: GeneratedExercise[] = []
-      let missed: string[] = []
-      for (const spec of template.slots) {
-        for (let k = 0; k < spec.count; k++) {
-          const ex = pick(spec.slot)
-          if (!ex) {
-            missed.push(spec.slot)
-            continue
-          }
-          const cond = isConditioning(ex.name)
-          const reps = cond ? 1 : Math.max(1, Math.floor((goal.repsRange[0] + goal.repsRange[1]) / 2))
-          const rpe = Math.max(5, goal.rpe - (input.experience === 'beginner' ? 1 : 0))
-          const rest = cond ? 60 : Math.round((goal.rest[0] + goal.rest[1]) / 2)
-          exercises.push({ name: ex.name, sets: goal.sets, reps, kg: 0, rpe, rest })
+      const missed: string[] = []
+      slots.forEach((slot, idx) => {
+        const ex = pick(slot)
+        if (!ex) {
+          missed.push(slot)
+          return
         }
-      }
+        const cond = isConditioning(ex.name)
+        const reps = method.reps ?? (cond ? 1 : Math.max(1, Math.floor((goal.repsRange[0] + goal.repsRange[1]) / 2)))
+        const rpe = method.rpe ?? Math.max(5, goal.rpe - (input.experience === 'beginner' ? 1 : 0))
+        const rest = method.rest ?? (cond ? 60 : Math.round((goal.rest[0] + goal.rest[1]) / 2))
+        const notation = assignNotation(method.notation, idx, slots.length)
+        exercises.push({ name: ex.name, sets: method.sets ?? goal.sets, reps, kg: 0, rpe, rest, notation })
+      })
       if (missed.length > 0) {
         const uniq = Array.from(new Set(missed))
-        warnings.push(`Not enough "${uniq.join('", "')}" exercises in the library for ${template.title} — slot(s) left empty`)
+        warnings.push(`Not enough "${uniq.join('", "')}" exercises in the library for ${title} — slot(s) left empty`)
       }
       if (exercises.length > 0) {
-        days[columns[i]] = { title: template.title, exercises }
+        days[columns[i]] = { title, exercises }
       }
     })
     return days
   }
 
   const week1 = buildWeek()
-  // Weeks 2–4 are clones (kg untouched at 0 — progression rules are a later phase).
-  const weeks: GeneratedWeek[] = [week1, ...Array.from({ length: 3 }, () => week1.map((d) => d && { ...d, exercises: d.exercises.map((e) => ({ ...e })) }))]
+  // Weeks 2+ are clones (kg untouched at 0 — progression rules are a later phase).
+  const weeks: GeneratedWeek[] = [week1, ...Array.from({ length: weekCount - 1 }, () => week1.map((d) => d && { ...d, exercises: d.exercises.map((e) => ({ ...e })) }))]
 
   if (excludedCount > 0) {
     warnings.unshift(`${excludedCount} exercise(s) swapped out for injury-safety rules`)
   }
 
   const goalLabel = goal.label
-  const name = `Generated — ${goalLabel}`
+  const name = `Generated — ${goalLabel} · ${method.label}`
   return {
     name,
     goalLabel,
     experienceLabel: EXPERIENCE_LABELS[input.experience],
+    methodLabel: method.label,
     weeks,
     warnings,
   }

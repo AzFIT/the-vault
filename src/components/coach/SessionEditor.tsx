@@ -86,7 +86,7 @@ export default function SessionEditor({
                 onChange={(e) => setNotation(ex.id, e.target.value)}
                 placeholder="–"
                 title="Poliquin pair notation — type or pick: A starts a new block, A1/A2 pair as a superset"
-                className="min-w-0 border border-vault-border/60 bg-vault-bg px-0.5 py-1 text-center text-[10px] uppercase text-vault-gold placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none"
+                className="h-6 min-w-0 border border-vault-border/60 bg-vault-bg px-0.5 text-center text-[10px] uppercase leading-none text-vault-gold placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none"
               />
               <div className="min-w-0">
                 <input
@@ -100,7 +100,7 @@ export default function SessionEditor({
                       ),
                     }))
                   }
-                  className="w-full min-w-0 border border-vault-border/60 bg-vault-bg px-1.5 py-1 text-[11px] text-white focus:border-vault-surface-3 focus:outline-none"
+                  className="h-6 w-full min-w-0 border border-vault-border/60 bg-vault-bg px-1.5 text-[11px] leading-none text-white focus:border-vault-surface-3 focus:outline-none"
                 />
                 {cue && (
                   <p className="mt-0.5 truncate text-[9px] leading-snug text-vault-faint" title={cue}>
@@ -121,7 +121,7 @@ export default function SessionEditor({
                       ),
                     }))
                   }
-                  className="tnum min-w-0 w-full border border-vault-border/60 bg-vault-bg px-0.5 py-1 text-center text-[11px] text-white focus:border-vault-surface-3 focus:outline-none"
+                  className="tnum h-6 min-w-0 w-full border border-vault-border/60 bg-vault-bg px-0.5 text-center text-[11px] leading-none text-white focus:border-vault-surface-3 focus:outline-none"
                 />
               ))}
               <input
@@ -138,7 +138,7 @@ export default function SessionEditor({
                     ),
                   }))
                 }
-                className="tnum min-w-0 w-full border border-vault-border/60 bg-vault-bg px-0.5 py-1 text-center text-[11px] text-white placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none"
+                className="tnum h-6 min-w-0 w-full border border-vault-border/60 bg-vault-bg px-0.5 text-center text-[11px] leading-none text-white placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none"
               />
               <button
                 aria-label="Remove exercise"

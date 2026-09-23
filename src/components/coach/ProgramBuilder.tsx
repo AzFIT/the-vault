@@ -606,6 +606,7 @@ export default function ProgramBuilder({
                     kg: e.kg,
                     rpe: e.rpe,
                     rest: e.rest ?? null,
+                    notation: e.notation,
                   })),
                 },
               ]
@@ -616,7 +617,7 @@ export default function ProgramBuilder({
     const draft: ProgramDraft = {
       id,
       name: g.name,
-      subtitle: `${g.weeks.length} wk · generated · ${g.goalLabel} · ${g.experienceLabel}`,
+      subtitle: `${g.weeks.length} wk · generated · ${g.goalLabel} · ${g.methodLabel} · ${g.experienceLabel}`,
       custom: true,
       weeks: Array.from({ length: g.weeks.length }, makeWeek),
     }

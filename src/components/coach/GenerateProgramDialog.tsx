@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { X, Wand2 } from 'lucide-react'
 import { loadExerciseLibrary } from '@/lib/exerciseLibrary'
 import { generateProgram } from '@/lib/programGenerator'
-import type { EquipmentId, ExperienceId, GeneratedProgram, GoalId } from '@/lib/programGenerator'
-import { GENERATOR_EQUIPMENT_LABELS, GENERATOR_EXPERIENCE_LABELS, GENERATOR_GOALS } from '@/lib/programGenerator'
+import type { EquipmentId, ExperienceId, GeneratedProgram, GoalId, MethodId } from '@/lib/programGenerator'
+import { GENERATOR_EQUIPMENT_LABELS, GENERATOR_EXPERIENCE_LABELS, GENERATOR_GOALS, GENERATOR_METHODS } from '@/lib/programGenerator'
 
 interface Props {
   open: boolean
@@ -16,6 +16,20 @@ const SELECT_CLASS =
   'w-full border border-vault-border bg-vault-bg px-3 py-2 text-[13px] text-white focus:border-vault-surface-3 focus:outline-none'
 const LABEL_CLASS = 'mb-1 block text-[10px] uppercase tracking-[0.16em] text-vault-muted'
 
+const METHOD_GROUPS: { id: 'strength' | 'conditioning' | 'performance'; label: string }[] = [
+  { id: 'strength', label: 'Classic Strength Protocols' },
+  { id: 'conditioning', label: 'Conditioning & Intervals' },
+  { id: 'performance', label: 'Performance & Skill' },
+]
+
+const NOTATION_PREVIEW: Record<string, string> = {
+  letter: 'A · B · C…',
+  pair: 'A1/A2 pairing',
+  trio: 'A1/A2/A3 grouping',
+  circuit: 'A1–A6 circuit',
+  none: 'no notation',
+}
+
 export default function GenerateProgramDialog({ open, onClose, onApply }: Props) {
   const [goal, setGoal] = useState<GoalId>('muscle')
   const [experience, setExperience] = useState<ExperienceId>('beginner')
@@ -23,10 +37,21 @@ export default function GenerateProgramDialog({ open, onClose, onApply }: Props)
   const [equipment, setEquipment] = useState<EquipmentId>('full')
   const [injuries, setInjuries] = useState('')
   const [programName, setProgramName] = useState('')
+  const [method, setMethod] = useState<MethodId>('straight')
+  const [exCount, setExCount] = useState(GENERATOR_METHODS.straight.defaultCount)
+  const [weeks, setWeeks] = useState(4)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (!open) return null
+
+  const methodDef = GENERATOR_METHODS[method]
+  const totalExercises = frequency * exCount
+
+  const changeMethod = (id: MethodId) => {
+    setMethod(id)
+    setExCount(GENERATOR_METHODS[id].defaultCount) // snap the count to the method's sweet spot
+  }
 
   const submit = async () => {
     if (busy) return
@@ -35,7 +60,10 @@ export default function GenerateProgramDialog({ open, onClose, onApply }: Props)
     try {
       const library = await loadExerciseLibrary()
       if (library.length === 0) throw new Error('exercise library is empty — check Supabase connection')
-      const result = generateProgram({ goal, experience, frequency, equipment, injuries }, library)
+      const result = generateProgram(
+        { goal, experience, frequency, equipment, injuries, method, exercisesPerSession: exCount, weeks },
+        library,
+      )
       if (programName.trim()) result.name = programName.trim()
       onApply(result)
       setBusy(false)
@@ -65,9 +93,61 @@ export default function GenerateProgramDialog({ open, onClose, onApply }: Props)
 
         <div className="space-y-3 p-4">
           <p className="text-[11px] leading-snug text-vault-faint">
-            Builds a full 4-week draft from the exercise library. Working loads are left
-            blank for you to set — progression comes later.
+            Builds a full draft from the exercise library. Working loads are left blank
+            for you to set — progression comes later.
           </p>
+
+          <div>
+            <label className={LABEL_CLASS} htmlFor="gen-method">Training method</label>
+            <select
+              id="gen-method"
+              className={SELECT_CLASS}
+              value={method}
+              onChange={(e) => changeMethod(e.target.value as MethodId)}
+            >
+              {METHOD_GROUPS.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {(Object.entries(GENERATOR_METHODS) as [MethodId, (typeof GENERATOR_METHODS)[MethodId]][])
+                    .filter(([, def]) => def.group === group.id)
+                    .map(([id, def]) => (
+                      <option key={id} value={id}>{def.label}</option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
+            <p className="mt-1 text-[10px] text-vault-faint">
+              {methodDef.note ?? `${NOTATION_PREVIEW[methodDef.notation]} · ${methodDef.defaultCount} exercises/session`}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLASS} htmlFor="gen-count">Exercises / session</label>
+              <select
+                id="gen-count"
+                className={SELECT_CLASS}
+                value={exCount}
+                onChange={(e) => setExCount(Number(e.target.value))}
+              >
+                {[3, 4, 5, 6, 7, 8].map((n) => (
+                  <option key={n} value={n}>{n} exercises</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={LABEL_CLASS} htmlFor="gen-weeks">Program length</label>
+              <select
+                id="gen-weeks"
+                className={SELECT_CLASS}
+                value={weeks}
+                onChange={(e) => setWeeks(Number(e.target.value))}
+              >
+                {[2, 3, 4, 5, 6, 8].map((n) => (
+                  <option key={n} value={n}>{n} weeks</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className={LABEL_CLASS} htmlFor="gen-goal">Goal</label>
@@ -96,6 +176,10 @@ export default function GenerateProgramDialog({ open, onClose, onApply }: Props)
               </select>
             </div>
           </div>
+
+          <p className="border border-vault-border/60 bg-vault-bg px-3 py-2 text-[10px] leading-snug text-vault-muted">
+            ≈ {totalExercises} exercises across {weeks} weeks · {methodDef.label} · {NOTATION_PREVIEW[methodDef.notation]}
+          </p>
 
           <div>
             <label className={LABEL_CLASS} htmlFor="gen-eq">Available equipment</label>
