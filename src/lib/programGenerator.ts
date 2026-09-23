@@ -159,11 +159,11 @@ function equipmentOk(ex: LibraryExercise, equipment: EquipmentId): boolean {
 
 // ---- split templates (frequency 2–4) ---------------------------------------
 
-const DAY_COLUMN_COUNT = 5 // Mon, Tue, Wed, Thu, Sat
+const DAY_COLUMN_COUNT = 7 // Mon–Sun
 
-/** Which day-column indices hold sessions for each frequency. */
+/** Which day-column indices hold sessions for each frequency (7-day week). */
 const PLACEMENT: Record<number, number[]> = {
-  2: [1, 3],
+  2: [0, 3],
   3: [0, 2, 4],
   4: [0, 1, 3, 4],
 }

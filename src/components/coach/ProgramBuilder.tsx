@@ -13,6 +13,8 @@ import {
   FileSpreadsheet,
   GripVertical,
   Link2,
+  Maximize2,
+  Minimize2,
   Plus,
   RefreshCw,
   Save,
@@ -24,6 +26,7 @@ import {
 import { toast } from 'sonner'
 import { coachClients, programs } from '@/data/mock'
 import type { Client } from '@/data/mock'
+import { loadExerciseLibrary } from '@/lib/exerciseLibrary'
 import type { LibraryExercise } from '@/lib/exerciseLibrary'
 import {
   assignProgramToClient,
@@ -64,16 +67,21 @@ interface ExRow {
   reps: number
   kg: number
   rpe: number
+  /** Poliquin pair notation: A, A1, A2, B, B1… — resets every session. */
+  notation?: string
 }
 interface Session {
   id: string
   title: string
   exercises: ExRow[]
 }
+/** Non-training content placed on a day via the "+" menu. */
+type DayMarker = 'rest' | 'cardio' | 'mobility'
 interface DayCol {
   id: string
   label: string
   sessions: Session[]
+  marker?: DayMarker | null
 }
 interface Week {
   id: string
@@ -87,9 +95,15 @@ interface ProgramDraft {
   custom?: boolean
 }
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Sat']
-/** Which day columns sessions land on, keyed by sessions-per-week */
-const PLACEMENT: Record<number, number[]> = { 2: [1, 3], 3: [0, 2, 4], 4: [0, 1, 3, 4] }
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+/** Which day columns sessions land on, keyed by sessions-per-week (7-day week). */
+const PLACEMENT: Record<number, number[]> = { 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 4] }
+
+const MARKER_LABELS: Record<DayMarker, string> = {
+  rest: 'Rest',
+  cardio: 'Cardio',
+  mobility: 'Mobility',
+}
 
 const EXERCISE_POOLS: Record<string, string[]> = {
   'strength-foundation': [
@@ -235,6 +249,16 @@ export default function ProgramBuilder({
   const [sheetBusy, setSheetBusy] = useState<string | null>(null)
   const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
   const [genOpen, setGenOpen] = useState(false)
+  const [fullView, setFullView] = useState(false)
+  /** Week index whose full stacked plan is shown in the right panel. */
+  const [weekView, setWeekView] = useState<number | null>(null)
+  /** Day cell whose "+" menu is open. */
+  const [dayMenu, setDayMenu] = useState<{ weekIdx: number; dayIdx: number } | null>(null)
+  /** Pending duplicate-exercise decision. */
+  const [dupPending, setDupPending] = useState<{
+    exercise: LibraryExercise
+    alternatives: LibraryExercise[]
+  } | null>(null)
   const customCount = useRef(0)
 
   /** Fetch the trainer's Supabase programs (incl. seeded GBC template). */
@@ -664,7 +688,37 @@ export default function ProgramBuilder({
   }
 
   /** Append an exercise picked from the seeded Supabase library. */
-  const addFromLibrary = (ex: LibraryExercise) => {
+  const addFromLibrary = async (ex: LibraryExercise) => {
+    if (!sel) return
+    const week = draft.weeks[sel.weekIdx]
+    const usedInWeek = new Set(
+      week.days.flatMap((d) => d.sessions.flatMap((s) => s.exercises.map((x) => x.exercise.toLowerCase()))),
+    )
+    if (usedInWeek.has(ex.name.toLowerCase())) {
+      // Suggest variations: same category or same base exercise, not already used this week.
+      let library: LibraryExercise[] = []
+      try {
+        library = await loadExerciseLibrary()
+      } catch {
+        /* fall through — still let the coach decide */
+      }
+      const cat = ex.movement_category
+      const base = (ex.base_exercise ?? '').toLowerCase()
+      const alternatives = library
+        .filter(
+          (c) =>
+            c.name.toLowerCase() !== ex.name.toLowerCase() &&
+            !usedInWeek.has(c.name.toLowerCase()) &&
+            ((cat && c.movement_category === cat) || (base && (c.base_exercise ?? '').toLowerCase() === base)),
+        )
+        .slice(0, 4)
+      setDupPending({ exercise: ex, alternatives })
+      return
+    }
+    appendExercise(ex)
+  }
+
+  const appendExercise = (ex: { name: string }) => {
     if (!sel) return
     updateSession(sel, (s) => ({
       ...s,
@@ -673,6 +727,48 @@ export default function ProgramBuilder({
         { id: nextId('ex'), exercise: ex.name, sets: 3, reps: 10, kg: 0, rpe: 7 },
       ],
     }))
+  }
+
+  /** Set (or clear) a non-training marker on a day — rest / cardio / mobility. */
+  const setDayMarker = (wi: number, di: number, marker: DayMarker | null) => {
+    mutateDraft(selectedId, (d) => ({
+      ...d,
+      weeks: d.weeks.map((w, wIdx) =>
+        wIdx === wi
+          ? { ...w, days: w.days.map((day, dIdx) => (dIdx === di ? { ...day, marker } : day)) }
+          : w,
+      ),
+    }))
+    setDayMenu(null)
+  }
+
+  /**
+   * Poliquin notation auto-suggest: A → next block B; A1 → next block A2.
+   * Applied to the following row only when it has no notation yet.
+   */
+  const NOTATION_OPTIONS = ['A', 'A1', 'A2', 'A3', 'A4', 'B', 'B1', 'B2', 'B3', 'B4', 'C', 'C1', 'C2', 'C3', 'C4', 'D', 'D1', 'D2', 'D3', 'D4']
+  const nextNotation = (cur: string): string | null => {
+    const m = /^([A-H])(\d*)$/.exec(cur)
+    if (!m) return null
+    const letter = m[1]
+    if (m[2]) return `${letter}${Number(m[2]) + 1}`
+    const code = letter.charCodeAt(0) + 1
+    return code <= 'H'.charCodeAt(0) ? String.fromCharCode(code) : null
+  }
+  const setNotation = (exId: string, value: string) => {
+    if (!sel) return
+    updateSession(sel, (s) => {
+      const idx = s.exercises.findIndex((x) => x.id === exId)
+      if (idx < 0) return s
+      const exercises = s.exercises.map((x, i) =>
+        i === idx ? { ...x, notation: value || undefined } : x,
+      )
+      const suggested = value ? nextNotation(value) : null
+      if (suggested && idx + 1 < exercises.length && !exercises[idx + 1].notation) {
+        exercises[idx + 1] = { ...exercises[idx + 1], notation: suggested }
+      }
+      return { ...s, exercises }
+    })
   }
 
   // ---- drag & drop ---------------------------------------------------------
@@ -696,6 +792,249 @@ export default function ProgramBuilder({
   const assignedClients = useMemo(
     () => coachClients.filter((c) => effectiveProgramId(c, overrides) === selectedId),
     [overrides, selectedId],
+  )
+
+  /** Full stacked plan for one week — every day, every session, every exercise. */
+  const renderWeekStack = (wi: number, onPickSession?: (s: Sel) => void) => {
+    const week = draft.weeks[wi]
+    if (!week) return null
+    return (
+      <div className="space-y-4">
+        <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+          Week {wi + 1} · full plan
+        </p>
+        {week.days.map((day) =>
+          day.sessions.length === 0 && !day.marker ? null : (
+            <div key={day.id}>
+              <p className="mb-1.5 flex items-center gap-2 text-[9px] uppercase tracking-[0.14em] text-vault-faint">
+                {day.label}
+                {day.marker && (
+                  <span className="border border-vault-border px-1 text-[8px] text-vault-gold">
+                    {MARKER_LABELS[day.marker]}
+                  </span>
+                )}
+              </p>
+              <div className="space-y-1.5">
+                {day.sessions.map((sess) => (
+                  <button
+                    key={sess.id}
+                    onClick={() => onPickSession?.({ weekIdx: wi, dayIdx: week.days.indexOf(day), sessionId: sess.id })}
+                    className="block w-full border border-vault-border bg-vault-surface p-2.5 text-left transition-colors hover:border-vault-surface-3"
+                  >
+                    <span className="block truncate text-[11px] font-medium text-white" title={sess.title}>
+                      {sess.title}
+                    </span>
+                    <span className="mt-1 block space-y-0.5 text-[10px] text-vault-faint">
+                      {sess.exercises.map((x) => (
+                        <span
+                          key={x.id}
+                          className="block truncate"
+                          title={`${x.exercise} — ${x.sets} sets × ${x.reps} reps${x.kg ? ` @ ${x.kg}kg` : ''} · RPE ${x.rpe}`}
+                        >
+                          {x.notation && <span className="mr-1 text-vault-gold">{x.notation}</span>}
+                          {x.exercise}{' '}
+                          <span className="tnum">
+                            {x.sets}×{x.reps}
+                            {x.kg ? ` @${x.kg}kg` : ''}
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ),
+        )}
+      </div>
+    )
+  }
+
+  /** Week × day calendar grid. `large` = fullscreen rendering (bigger cells, more text). */
+  const renderCalendar = (large?: boolean) => (
+    <div className={large ? 'h-full overflow-auto pb-2 pr-1' : 'overflow-x-auto pb-2'}>
+      <div className="flex gap-3" style={{ minWidth: draft.weeks.length * (large ? 250 : 176) }}>
+        {draft.weeks.map((week, wi) => (
+          <div
+            key={week.id}
+            className={`${large ? 'w-60' : 'w-44'} shrink-0 border border-vault-border bg-vault-bg/60`}
+          >
+            <button
+              onClick={() => {
+                setWeekView(wi)
+                setSel(null)
+                setDayMenu(null)
+              }}
+              title={`View the whole of Week ${wi + 1}`}
+              className={`tnum block w-full border-b border-vault-border px-3 py-2 text-left text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                weekView === wi && !sel
+                  ? 'bg-vault-gold/10 text-vault-gold'
+                  : 'text-vault-muted hover:text-white'
+              }`}
+            >
+              W{wi + 1}
+            </button>
+            <div className="space-y-2 p-2">
+              {week.days.map((day, di) => {
+                const isTarget = dropTarget?.weekIdx === wi && dropTarget?.dayIdx === di
+                const menuOpen = dayMenu?.weekIdx === wi && dayMenu?.dayIdx === di
+                return (
+                  <div
+                    key={day.id}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDropTarget({ weekIdx: wi, dayIdx: di })
+                    }}
+                    onDragLeave={() =>
+                      setDropTarget((t) => (t?.weekIdx === wi && t?.dayIdx === di ? null : t))
+                    }
+                    onDrop={(e) => onDrop(e, wi, di)}
+                    className={`relative min-h-[52px] border p-1.5 transition-colors ${
+                      isTarget
+                        ? 'border-dashed border-white bg-white/5'
+                        : 'border-vault-border/50'
+                    }`}
+                  >
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[9px] uppercase tracking-[0.14em] text-vault-faint">
+                        {day.label}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        {day.marker && (
+                          <span className="border border-vault-gold/40 px-1 text-[8px] uppercase tracking-[0.12em] text-vault-gold">
+                            {MARKER_LABELS[day.marker]}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => setDayMenu(menuOpen ? null : { weekIdx: wi, dayIdx: di })}
+                          aria-label={`Add content on ${day.label}`}
+                          className={`transition-colors ${menuOpen ? 'text-white' : 'text-vault-faint hover:text-white'}`}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </span>
+                    </div>
+                    {menuOpen && (
+                      <div
+                        className="absolute right-0 top-4 z-30 w-44 border border-vault-border bg-vault-surface-2 shadow-lg"
+                        onMouseLeave={() => setDayMenu(null)}
+                      >
+                        {(
+                          [
+                            { label: 'Workout session', run: () => addSession(wi, di) },
+                            { label: 'Rest day', run: () => setDayMarker(wi, di, 'rest') },
+                            { label: 'Cardio', run: () => setDayMarker(wi, di, 'cardio') },
+                            {
+                              label: 'Mobility / recovery',
+                              run: () => setDayMarker(wi, di, 'mobility'),
+                            },
+                            ...(day.marker
+                              ? [{ label: 'Clear marker', run: () => setDayMarker(wi, di, null) }]
+                              : []),
+                          ] as { label: string; run: () => void }[]
+                        ).map((opt) => (
+                          <button
+                            key={opt.label}
+                            onClick={opt.run}
+                            className="block w-full px-3 py-2 text-left text-[11px] text-white transition-colors hover:bg-vault-surface-3"
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      {day.sessions.map((sess) => {
+                        const isSel = sel?.sessionId === sess.id
+                        return (
+                          <motion.div key={sess.id} layout="position">
+                            <div
+                              draggable
+                              onDragStart={(e) =>
+                                onDragStart(e, { weekIdx: wi, dayIdx: di, sessionId: sess.id })
+                              }
+                              onClick={() => {
+                                setWeekView(null)
+                                setSel({ weekIdx: wi, dayIdx: di, sessionId: sess.id })
+                              }}
+                              className={`group cursor-grab border p-2 transition-all hover:scale-[1.03] active:cursor-grabbing ${
+                                isSel
+                                  ? 'border-white bg-vault-surface-2 shadow-[0_0_12px_rgba(255,255,255,0.05)]'
+                                  : 'border-vault-border bg-vault-surface hover:border-vault-surface-3'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <GripVertical className="h-3 w-3 shrink-0 text-vault-faint" />
+                                <span
+                                  className="min-w-0 flex-1 truncate text-[11px] font-medium text-white"
+                                  title={sess.title}
+                                >
+                                  {sess.title}
+                                </span>
+                                <span className="hidden items-center gap-0.5 group-hover:flex">
+                                  <button
+                                    aria-label="Move up"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      reorderSession({ weekIdx: wi, dayIdx: di, sessionId: sess.id }, -1)
+                                    }}
+                                    className="text-vault-faint hover:text-white"
+                                  >
+                                    <ArrowUp className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    aria-label="Move down"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      reorderSession({ weekIdx: wi, dayIdx: di, sessionId: sess.id }, 1)
+                                    }}
+                                    className="text-vault-faint hover:text-white"
+                                  >
+                                    <ArrowDown className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    aria-label="Remove session"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      removeSession({ weekIdx: wi, dayIdx: di, sessionId: sess.id })
+                                    }}
+                                    className="text-vault-faint hover:text-white"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              </div>
+                              <p
+                                className="mt-1 truncate text-[10px] text-vault-faint"
+                                title={sess.exercises
+                                  .map(
+                                    (x) =>
+                                      `${x.notation ? x.notation + ' · ' : ''}${x.exercise} ${x.sets}×${x.reps}`,
+                                  )
+                                  .join('  |  ')}
+                              >
+                                {sess.exercises
+                                  .map(
+                                    (x) =>
+                                      `${x.notation ? x.notation + ' ' : ''}${x.exercise} ${x.sets}×${x.reps}`,
+                                  )
+                                  .slice(0, large ? 3 : 2)
+                                  .join(', ')}
+                                {sess.exercises.length > (large ? 3 : 2) ? '…' : ''}
+                              </p>
+                            </div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 
   return (
@@ -933,147 +1272,22 @@ export default function ProgramBuilder({
                 ) : (
                   <p className="text-[14px] font-medium text-white">{draft.name}</p>
                 )}
-                <p className="text-[11px] uppercase tracking-[0.14em] text-vault-faint">
-                  {draft.weeks.length} weeks · drag sessions between days
-                </p>
-              </div>
-
-              <div className="overflow-x-auto pb-2">
-                <div className="flex gap-3" style={{ minWidth: draft.weeks.length * 176 }}>
-                  {draft.weeks.map((week, wi) => (
-                    <div
-                      key={week.id}
-                      className="w-44 shrink-0 border border-vault-border bg-vault-bg/60"
-                    >
-                      <p className="tnum border-b border-vault-border px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-vault-muted">
-                        W{wi + 1}
-                      </p>
-                      <div className="space-y-2 p-2">
-                        {week.days.map((day, di) => {
-                          const isTarget =
-                            dropTarget?.weekIdx === wi && dropTarget?.dayIdx === di
-                          return (
-                            <div
-                              key={day.id}
-                              onDragOver={(e) => {
-                                e.preventDefault()
-                                setDropTarget({ weekIdx: wi, dayIdx: di })
-                              }}
-                              onDragLeave={() =>
-                                setDropTarget((t) =>
-                                  t?.weekIdx === wi && t?.dayIdx === di ? null : t,
-                                )
-                              }
-                              onDrop={(e) => onDrop(e, wi, di)}
-                              className={`min-h-[52px] border p-1.5 transition-colors ${
-                                isTarget
-                                  ? 'border-dashed border-white bg-white/5'
-                                  : 'border-vault-border/50'
-                              }`}
-                            >
-                              <div className="mb-1 flex items-center justify-between">
-                                <span className="text-[9px] uppercase tracking-[0.14em] text-vault-faint">
-                                  {day.label}
-                                </span>
-                                <button
-                                  onClick={() => addSession(wi, di)}
-                                  aria-label={`Add session on ${day.label}`}
-                                  className="text-vault-faint transition-colors hover:text-white"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </button>
-                              </div>
-                              <div className="space-y-1.5">
-                                {day.sessions.map((sess) => {
-                                  const isSel = sel?.sessionId === sess.id
-                                  return (
-                                    <motion.div key={sess.id} layout="position">
-                                      <div
-                                        draggable
-                                        onDragStart={(e) =>
-                                          onDragStart(e, {
-                                            weekIdx: wi,
-                                            dayIdx: di,
-                                            sessionId: sess.id,
-                                          })
-                                        }
-                                        onClick={() =>
-                                          setSel({ weekIdx: wi, dayIdx: di, sessionId: sess.id })
-                                        }
-                                        className={`group cursor-grab border p-2 transition-all hover:scale-[1.03] active:cursor-grabbing ${
-                                        isSel
-                                          ? 'border-white bg-vault-surface-2 shadow-[0_0_12px_rgba(255,255,255,0.05)]'
-                                          : 'border-vault-border bg-vault-surface hover:border-vault-surface-3'
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-1.5">
-                                        <GripVertical className="h-3 w-3 shrink-0 text-vault-faint" />
-                                        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-white">
-                                          {sess.title}
-                                        </span>
-                                        <span className="hidden items-center gap-0.5 group-hover:flex">
-                                          <button
-                                            aria-label="Move up"
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              reorderSession(
-                                                { weekIdx: wi, dayIdx: di, sessionId: sess.id },
-                                                -1,
-                                              )
-                                            }}
-                                            className="text-vault-faint hover:text-white"
-                                          >
-                                            <ArrowUp className="h-3 w-3" />
-                                          </button>
-                                          <button
-                                            aria-label="Move down"
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              reorderSession(
-                                                { weekIdx: wi, dayIdx: di, sessionId: sess.id },
-                                                1,
-                                              )
-                                            }}
-                                            className="text-vault-faint hover:text-white"
-                                          >
-                                            <ArrowDown className="h-3 w-3" />
-                                          </button>
-                                          <button
-                                            aria-label="Remove session"
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              removeSession({
-                                                weekIdx: wi,
-                                                dayIdx: di,
-                                                sessionId: sess.id,
-                                              })
-                                            }}
-                                            className="text-vault-faint hover:text-white"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </span>
-                                      </div>
-                                      <p className="mt-1 truncate text-[10px] text-vault-faint">
-                                        {sess.exercises
-                                          .map((x) => `${x.exercise} ${x.sets}×${x.reps}`)
-                                          .slice(0, 2)
-                                          .join(', ')}
-                                        {sess.exercises.length > 2 ? '…' : ''}
-                                      </p>
-                                      </div>
-                                    </motion.div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-vault-faint">
+                    {draft.weeks.length} weeks · drag sessions between days
+                  </p>
+                  <button
+                    onClick={() => setFullView(true)}
+                    title="Fullscreen week view"
+                    aria-label="Fullscreen week view"
+                    className="text-vault-faint transition-colors hover:text-white"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
+
+              {renderCalendar(false)}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1104,7 +1318,8 @@ export default function ProgramBuilder({
 
               {/* Exercise table */}
               <div className="space-y-1.5">
-                <div className="grid grid-cols-[minmax(0,1fr)_34px_34px_46px_34px_20px] gap-1 text-[9px] uppercase tracking-[0.12em] text-vault-faint">
+                <div className="grid grid-cols-[40px_minmax(0,1fr)_32px_38px_46px_32px_18px] gap-1 text-[9px] uppercase tracking-[0.12em] text-vault-faint">
+                  <span className="text-center" title="Poliquin pair notation (supersets)">Pair</span>
                   <span>Exercise</span>
                   <span className="text-center">Sets</span>
                   <span className="text-center">Reps</span>
@@ -1115,10 +1330,24 @@ export default function ProgramBuilder({
                 {selectedSession.exercises.map((ex) => (
                   <div
                     key={ex.id}
-                    className="grid grid-cols-[minmax(0,1fr)_34px_34px_46px_34px_20px] items-center gap-1"
+                    className="grid grid-cols-[40px_minmax(0,1fr)_32px_38px_46px_32px_18px] items-center gap-1"
                   >
+                    <select
+                      value={ex.notation ?? ''}
+                      onChange={(e) => setNotation(ex.id, e.target.value)}
+                      title="Poliquin pair notation — A starts a new block, A1/A2 pair as a superset"
+                      className="min-w-0 border border-vault-border/60 bg-vault-bg px-0.5 py-1 text-center text-[10px] text-vault-gold focus:border-vault-surface-3 focus:outline-none"
+                    >
+                      <option value="">–</option>
+                      {NOTATION_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       value={ex.exercise}
+                      title={ex.exercise}
                       onChange={(e) =>
                         updateSession(sel, (s) => ({
                           ...s,
@@ -1144,7 +1373,7 @@ export default function ProgramBuilder({
                             ),
                           }))
                         }
-                        className="tnum w-full border border-vault-border/60 bg-vault-bg px-1 py-1 text-center text-[11px] text-white focus:border-vault-surface-3 focus:outline-none"
+                        className="tnum min-w-0 w-full border border-vault-border/60 bg-vault-bg px-0.5 py-1 text-center text-[11px] text-white focus:border-vault-surface-3 focus:outline-none"
                       />
                     ))}
                     <button
@@ -1257,6 +1486,27 @@ export default function ProgramBuilder({
                 </button>
               </div>
             </div>
+          ) : weekView !== null ? (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+                  Week detail
+                </p>
+                <button
+                  onClick={() => setWeekView(null)}
+                  aria-label="Clear week view"
+                  className="text-vault-faint hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="max-h-[480px] overflow-y-auto pr-1">
+                {renderWeekStack(weekView, (s) => {
+                  setWeekView(null)
+                  setSel(s)
+                })}
+              </div>
+            </div>
           ) : (
             <div className="flex h-full min-h-[160px] flex-col items-start justify-center gap-2">
               <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
@@ -1276,6 +1526,89 @@ export default function ProgramBuilder({
       </div>
 
       <GenerateProgramDialog open={genOpen} onClose={() => setGenOpen(false)} onApply={applyGenerated} />
+
+      {/* Fullscreen week view */}
+      {fullView && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-vault-bg p-4 lg:p-6">
+          <div className="mb-4 flex items-center justify-between border-b border-vault-border pb-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+                Fullscreen week view
+              </p>
+              <p className="text-[16px] font-medium text-white">{draft.name}</p>
+            </div>
+            <button
+              onClick={() => setFullView(false)}
+              className="inline-flex items-center gap-2 border border-vault-border px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] text-vault-muted transition-colors hover:text-white"
+            >
+              <Minimize2 className="h-3.5 w-3.5" /> Exit
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 gap-5">
+            <div className="min-w-0 flex-1">{renderCalendar(true)}</div>
+            <div className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-vault-border pl-5 lg:block">
+              {renderWeekStack(weekView ?? 0, (s) => {
+                setSel(s)
+                setFullView(false)
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate exercise — variation picker */}
+      {dupPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm border border-vault-border bg-vault-surface p-5">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+              Duplicate exercise
+            </p>
+            <p className="mt-2 text-[13px] leading-relaxed text-white">
+              “{dupPending.exercise.name}” is already used in Week{' '}
+              {sel ? sel.weekIdx + 1 : '?'}. Pick a variation instead, or add it anyway.
+            </p>
+            <div className="mt-3 space-y-1.5">
+              {dupPending.alternatives.length === 0 && (
+                <p className="text-[11px] text-vault-faint">
+                  No unused variations found in the library for this category.
+                </p>
+              )}
+              {dupPending.alternatives.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => {
+                    appendExercise(a)
+                    setDupPending(null)
+                  }}
+                  className="block w-full border border-vault-border px-3 py-2 text-left text-[12px] text-white transition-colors hover:border-vault-gold/60 hover:bg-vault-gold/5"
+                >
+                  {a.name}
+                  <span className="block text-[9px] uppercase tracking-[0.1em] text-vault-faint">
+                    {[a.movement_category, a.equipment].filter(Boolean).join(' · ')}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDupPending(null)}
+                className="border border-vault-border px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] text-vault-muted transition-colors hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  appendExercise(dupPending.exercise)
+                  setDupPending(null)
+                }}
+                className="border border-white/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] text-white transition-colors hover:bg-white/10"
+              >
+                Add anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
