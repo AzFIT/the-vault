@@ -910,11 +910,19 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
   const trainerId = String(body.trainer_id ?? DEFAULT_TRAINER)
-  const action = String(body.action ?? 'status')
+  // The coach UI spells actions pull_template/push_template; this function's
+  // canonical form is template_pull/template_push. Normalize both.
+  const rawAction = String(body.action ?? 'status')
+  const action =
+    rawAction === 'pull_template' ? 'template_pull'
+    : rawAction === 'push_template' ? 'template_push'
+    : rawAction === 'status_template' ? 'template_status'
+    : rawAction === 'link_template' ? 'template_link'
+    : rawAction
   const programId = body.program_id ? String(body.program_id) : null
 
   // ---- template mode (trainer master workbook) --------------------------------
-  if (action.startsWith('template_')) {
+  if (action.startsWith('template_') || action.endsWith('_template')) {
     let sheetId = await getConfig(supabase, 'template_sheet_id')
     if (action === 'template_status') {
       return json({
