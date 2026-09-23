@@ -238,7 +238,7 @@ function Hero() {
             <img
               src={asset('brand/vault-door-gold.png')}
               alt="The Vault door — staff entrance"
-              className="w-24 transition-all duration-500 group-hover:scale-105 group-hover:drop-shadow-[0_0_28px_rgba(212,175,55,0.35)] md:w-28"
+              className="w-[clamp(88px,22vw,280px)] transition-all duration-500 group-hover:scale-105 group-hover:drop-shadow-[0_0_28px_rgba(212,175,55,0.35)]"
             />
           </Link>
           <h1 className="hero-item h-display text-[34px] leading-[1.1] md:text-[56px]">
