@@ -15,13 +15,21 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
  */
 const STAFF_KEY = 'vault_enq_3d8b52f1a947c60e'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, x-staff-key',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   })
 
 Deno.serve(async (req: Request) => {
+  // Browser preflight (supabase-js sends authorization/apikey headers).
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
   const supabase = createClient(
