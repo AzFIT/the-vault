@@ -16,10 +16,16 @@ const SHEETS_SCOPE =
   'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file'
 const SHEETS_API = 'https://sheets.googleapis.com/v4'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   })
 
 // ---------------------------------------------------------------------------
@@ -887,6 +893,8 @@ async function templatePush(sb: SB, token: string, sheetId: string) {
 // ---------------------------------------------------------------------------
 
 Deno.serve(async (req: Request) => {
+  // Browser preflight (supabase-js sends authorization/apikey headers).
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
   let body: Record<string, unknown>
