@@ -53,6 +53,7 @@ export default function PortalLogin() {
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [suggestOpen, setSuggestOpen] = useState(false)
   const [selected, setSelected] = useState('rachel-cheung')
   const selectedProfile = getProfile(selected)
 
@@ -152,8 +153,40 @@ export default function PortalLogin() {
                     setLogin(e.target.value)
                     setError(null)
                   }}
+                  onFocus={() => setSuggestOpen(true)}
                   onKeyDown={(e) => e.key === 'Enter' && enterWithCard()}
                 />
+                {/* Tester suggestions — tap one to fill email + password.
+                    Removed before real authentication ships. */}
+                {suggestOpen && (
+                  <div className="mt-2 border border-vault-border bg-vault-bg">
+                    <p className="border-b border-vault-border/60 px-3 py-1.5 text-[9px] uppercase tracking-[0.18em] text-vault-faint">
+                      Tester accounts — tap to fill
+                    </p>
+                    {TESTER_ACCOUNTS.map((a) => (
+                      <button
+                        key={a.match[0]}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault() // keep focus semantics simple; fill both fields
+                          setLogin(a.match[0])
+                          setPassword('vault123')
+                          setSuggestOpen(false)
+                          setError(null)
+                        }}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-white/[0.04]"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-bold text-white">{a.name}</span>
+                          <span className="block truncate text-[10px] text-vault-faint">{a.match[0]}</span>
+                        </span>
+                        <span className="shrink-0 border border-vault-border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-vault-muted">
+                          {a.roleLabel}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-[10px] uppercase tracking-[0.16em] text-vault-muted" htmlFor="pl-pass">
