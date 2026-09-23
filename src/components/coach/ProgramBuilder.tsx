@@ -6,7 +6,6 @@ import {
   ArrowUp,
   ChevronDown,
   CloudDownload,
-  Copy,
   Database,
   Download,
   ExternalLink,
@@ -18,7 +17,6 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Trash2,
   Upload,
   Wand2,
   X,
@@ -50,7 +48,6 @@ import {
   pushProgramToSheet,
   sheetUrl,
 } from '@/lib/sheetsSync'
-import ExercisePicker from './ExercisePicker'
 import GenerateProgramDialog from './GenerateProgramDialog'
 import type { GeneratedProgram } from '@/lib/programGenerator'
 import TemplateSyncCard from './TemplateSyncCard'
@@ -60,50 +57,14 @@ import { EASE } from './utils'
 // ---------------------------------------------------------------------------
 // Local program-builder model (local state only — design §4)
 // ---------------------------------------------------------------------------
-interface ExRow {
-  id: string
-  exercise: string
-  sets: number
-  reps: number
-  kg: number
-  rpe: number
-  /** Poliquin pair notation: A, A1, A2, B, B1… — resets every session. */
-  notation?: string
-}
-interface Session {
-  id: string
-  title: string
-  exercises: ExRow[]
-}
-/** Non-training content placed on a day via the "+" menu. */
-type DayMarker = 'rest' | 'cardio' | 'mobility'
-interface DayCol {
-  id: string
-  label: string
-  sessions: Session[]
-  marker?: DayMarker | null
-}
-interface Week {
-  id: string
-  days: DayCol[]
-}
-interface ProgramDraft {
-  id: string
-  name: string
-  subtitle: string
-  weeks: Week[]
-  custom?: boolean
-}
-
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-/** Which day columns sessions land on, keyed by sessions-per-week (7-day week). */
-const PLACEMENT: Record<number, number[]> = { 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 4] }
-
-const MARKER_LABELS: Record<DayMarker, string> = {
-  rest: 'Rest',
-  cardio: 'Cardio',
-  mobility: 'Mobility',
-}
+import {
+  DAY_LABELS,
+  MARKER_LABELS,
+  nextId,
+  PLACEMENT,
+} from './builderModel'
+import type { DayMarker, ExRow, ProgramDraft, Session, Week } from './builderModel'
+import SessionEditor from './SessionEditor'
 
 const EXERCISE_POOLS: Record<string, string[]> = {
   'strength-foundation': [
@@ -150,9 +111,6 @@ const TITLE_POOLS: Record<string, string[]> = {
   'postnatal-return': ['Reconnect Session', 'Strength Rebuild', 'Core + Carry'],
   'body-comp-reset': ['Strength A', 'Conditioning', 'Strength B', 'Steps + Core'],
 }
-
-let uid = 0
-const nextId = (p: string) => `${p}-${++uid}`
 
 function makeSession(programId: string, weekIdx: number, slot: number): Session {
   const pool = EXERCISE_POOLS[programId] ?? EXERCISE_POOLS['strength-foundation']
@@ -250,6 +208,27 @@ export default function ProgramBuilder({
   const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
   const [genOpen, setGenOpen] = useState(false)
   const [fullView, setFullView] = useState(false)
+  /** Exercise-name → coaching cue, from the seeded library (loaded once). */
+  const [cues, setCues] = useState<Map<string, string> | null>(null)
+  useEffect(() => {
+    let live = true
+    loadExerciseLibrary()
+      .then((rows) => {
+        if (!live) return
+        setCues(
+          new Map(
+            rows
+              .filter((r) => r.coaching_cues)
+              .map((r) => [r.name.toLowerCase(), r.coaching_cues as string]),
+          ),
+        )
+      })
+      .catch(() => setCues(null))
+    return () => {
+      live = false
+    }
+  }, [])
+  const cueFor = (name: string) => cues?.get(name.toLowerCase()) ?? null
   /** Week index whose full stacked plan is shown in the right panel. */
   const [weekView, setWeekView] = useState<number | null>(null)
   /** Day cell whose "+" menu is open. */
@@ -414,6 +393,7 @@ export default function ProgramBuilder({
           reps: parseInt(e.reps ?? '', 10) || 0,
           kg: 0,
           rpe: 7,
+          rest: e.rest_seconds ?? null,
         })),
     }))
     const cloneForWeek = (): Week => ({
@@ -455,6 +435,20 @@ export default function ProgramBuilder({
   }, [focusNonce])
 
   const draft = drafts[selectedId]
+
+  /** Fullscreen keyboard: ESC exits, arrows move the week panel. */
+  useEffect(() => {
+    if (!fullView) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFullView(false)
+      else if (e.key === 'ArrowRight')
+        setWeekView((w) => Math.min((w ?? 0) + 1, draft.weeks.length - 1))
+      else if (e.key === 'ArrowLeft') setWeekView((w) => Math.max((w ?? 0) - 1, 0))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullView, selectedId])
 
   const assignedCount = (pid: string) =>
     coachClients.filter((c) => effectiveProgramId(c, overrides) === pid).length
@@ -611,6 +605,7 @@ export default function ProgramBuilder({
                     reps: e.reps,
                     kg: e.kg,
                     rpe: e.rpe,
+                    rest: e.rest ?? null,
                   })),
                 },
               ]
@@ -657,7 +652,7 @@ export default function ProgramBuilder({
             name: x.exercise,
             sets: x.sets || null,
             reps: String(x.reps),
-            rest_seconds: null,
+            rest_seconds: x.rest ?? null,
             order_index: i + 1,
             notes: null,
           })),
@@ -740,35 +735,6 @@ export default function ProgramBuilder({
       ),
     }))
     setDayMenu(null)
-  }
-
-  /**
-   * Poliquin notation auto-suggest: A → next block B; A1 → next block A2.
-   * Applied to the following row only when it has no notation yet.
-   */
-  const NOTATION_OPTIONS = ['A', 'A1', 'A2', 'A3', 'A4', 'B', 'B1', 'B2', 'B3', 'B4', 'C', 'C1', 'C2', 'C3', 'C4', 'D', 'D1', 'D2', 'D3', 'D4']
-  const nextNotation = (cur: string): string | null => {
-    const m = /^([A-H])(\d*)$/.exec(cur)
-    if (!m) return null
-    const letter = m[1]
-    if (m[2]) return `${letter}${Number(m[2]) + 1}`
-    const code = letter.charCodeAt(0) + 1
-    return code <= 'H'.charCodeAt(0) ? String.fromCharCode(code) : null
-  }
-  const setNotation = (exId: string, value: string) => {
-    if (!sel) return
-    updateSession(sel, (s) => {
-      const idx = s.exercises.findIndex((x) => x.id === exId)
-      if (idx < 0) return s
-      const exercises = s.exercises.map((x, i) =>
-        i === idx ? { ...x, notation: value || undefined } : x,
-      )
-      const suggested = value ? nextNotation(value) : null
-      if (suggested && idx + 1 < exercises.length && !exercises[idx + 1].notation) {
-        exercises[idx + 1] = { ...exercises[idx + 1], notation: suggested }
-      }
-      return { ...s, exercises }
-    })
   }
 
   // ---- drag & drop ---------------------------------------------------------
@@ -1293,7 +1259,7 @@ export default function ProgramBuilder({
         </div>
 
         {/* Detail panel */}
-        <div className="w-full shrink-0 border-t border-vault-border pt-4 lg:w-[300px] lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+        <div className="w-full shrink-0 border-t border-vault-border pt-4 lg:w-[340px] lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
           {selectedSession && sel ? (
             <div>
               <div className="mb-3 flex items-center justify-between">
@@ -1308,113 +1274,17 @@ export default function ProgramBuilder({
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <input
-                value={selectedSession.title}
-                onChange={(e) =>
-                  updateSession(sel, (s) => ({ ...s, title: e.target.value }))
-                }
-                className="mb-3 w-full border border-vault-border bg-vault-bg px-3 py-2 text-[14px] font-medium text-white focus:border-vault-surface-3 focus:outline-none"
-              />
-
-              {/* Exercise table */}
-              <div className="space-y-1.5">
-                <div className="grid grid-cols-[40px_minmax(0,1fr)_32px_38px_46px_32px_18px] gap-1 text-[9px] uppercase tracking-[0.12em] text-vault-faint">
-                  <span className="text-center" title="Poliquin pair notation (supersets)">Pair</span>
-                  <span>Exercise</span>
-                  <span className="text-center">Sets</span>
-                  <span className="text-center">Reps</span>
-                  <span className="text-center">Kg</span>
-                  <span className="text-center">RPE</span>
-                  <span />
-                </div>
-                {selectedSession.exercises.map((ex) => (
-                  <div
-                    key={ex.id}
-                    className="grid grid-cols-[40px_minmax(0,1fr)_32px_38px_46px_32px_18px] items-center gap-1"
-                  >
-                    <select
-                      value={ex.notation ?? ''}
-                      onChange={(e) => setNotation(ex.id, e.target.value)}
-                      title="Poliquin pair notation — A starts a new block, A1/A2 pair as a superset"
-                      className="min-w-0 border border-vault-border/60 bg-vault-bg px-0.5 py-1 text-center text-[10px] text-vault-gold focus:border-vault-surface-3 focus:outline-none"
-                    >
-                      <option value="">–</option>
-                      {NOTATION_OPTIONS.map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      value={ex.exercise}
-                      title={ex.exercise}
-                      onChange={(e) =>
-                        updateSession(sel, (s) => ({
-                          ...s,
-                          exercises: s.exercises.map((x) =>
-                            x.id === ex.id ? { ...x, exercise: e.target.value } : x,
-                          ),
-                        }))
-                      }
-                      className="min-w-0 border border-vault-border/60 bg-vault-bg px-1.5 py-1 text-[11px] text-white focus:border-vault-surface-3 focus:outline-none"
-                    />
-                    {(['sets', 'reps', 'kg', 'rpe'] as const).map((field) => (
-                      <input
-                        key={field}
-                        type="number"
-                        value={ex[field]}
-                        onChange={(e) =>
-                          updateSession(sel, (s) => ({
-                            ...s,
-                            exercises: s.exercises.map((x) =>
-                              x.id === ex.id
-                                ? { ...x, [field]: Number(e.target.value) }
-                                : x,
-                            ),
-                          }))
-                        }
-                        className="tnum min-w-0 w-full border border-vault-border/60 bg-vault-bg px-0.5 py-1 text-center text-[11px] text-white focus:border-vault-surface-3 focus:outline-none"
-                      />
-                    ))}
-                    <button
-                      aria-label="Remove exercise"
-                      onClick={() =>
-                        updateSession(sel, (s) => ({
-                          ...s,
-                          exercises: s.exercises.filter((x) => x.id !== ex.id),
-                        }))
-                      }
-                      className="text-vault-faint hover:text-white"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() =>
-                    updateSession(sel, (s) => ({
-                      ...s,
-                      exercises: [
-                        ...s.exercises,
-                        { id: nextId('ex'), exercise: 'New exercise', sets: 3, reps: 8, kg: 20, rpe: 7 },
-                      ],
-                    }))
-                  }
-                  className="btn-ghost mt-1 text-[10px]"
-                >
-                  <Plus className="h-3 w-3" /> Add exercise
-                </button>
-              </div>
-
-              {/* Seeded Supabase exercise library */}
-              <ExercisePicker
-                onPick={addFromLibrary}
-                pickedNames={new Set(selectedSession.exercises.map((x) => x.exercise))}
+              <SessionEditor
+                session={selectedSession}
+                onUpdate={(fn) => updateSession(sel, fn)}
+                onPickLibrary={addFromLibrary}
+                cueFor={cueFor}
+                onDuplicateWeek={duplicateWeek}
+                onDeleteSession={() => removeSession(sel)}
               />
 
               {/* Assign dropdown — real Supabase clients for DB-backed programs */}
-              <div className="relative mt-5">
-                <button
+              <div className="relative mt-5">                <button
                   onClick={() => setAssignOpen((v) => !v)}
                   disabled={!selectedId.startsWith('db-')}
                   className="flex w-full items-center justify-between border border-white/70 px-3 py-2.5 text-[11px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1472,18 +1342,6 @@ export default function ProgramBuilder({
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
-
-              <div className="mt-4 flex items-center gap-4">
-                <button onClick={duplicateWeek} className="btn-ghost text-[10px]">
-                  <Copy className="h-3 w-3" /> Duplicate week
-                </button>
-                <button
-                  onClick={() => removeSession(sel)}
-                  className="btn-ghost text-[10px]"
-                >
-                  <Trash2 className="h-3 w-3" /> Delete
-                </button>
               </div>
             </div>
           ) : weekView !== null ? (
@@ -1546,13 +1404,65 @@ export default function ProgramBuilder({
           </div>
           <div className="flex min-h-0 flex-1 gap-5">
             <div className="min-w-0 flex-1">{renderCalendar(true)}</div>
-            <div className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-vault-border pl-5 lg:block">
-              {renderWeekStack(weekView ?? 0, (s) => {
-                setSel(s)
-                setFullView(false)
-              })}
+            <div className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-vault-border pl-5 lg:block">
+              {sel && selectedSession ? (
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <button
+                      onClick={() => setSel(null)}
+                      className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-vault-muted transition-colors hover:text-white"
+                    >
+                      <ChevronDown className="h-3 w-3 -rotate-90" /> Week {weekView !== null ? weekView + 1 : sel.weekIdx + 1} plan
+                    </button>
+                    <button
+                      onClick={() => setSel(null)}
+                      aria-label="Back to week plan"
+                      className="text-vault-faint hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <SessionEditor
+                    session={selectedSession}
+                    onUpdate={(fn) => updateSession(sel, fn)}
+                    onPickLibrary={addFromLibrary}
+                    cueFor={cueFor}
+                    onDuplicateWeek={duplicateWeek}
+                    onDeleteSession={() => {
+                      removeSession(sel)
+                      setFullView(false)
+                    }}
+                  />
+                </div>
+              ) : (
+                renderWeekStack(weekView ?? 0, (s) => setSel(s))
+              )}
             </div>
           </div>
+
+          {/* Mobile: session editor as a bottom sheet */}
+          {sel && selectedSession && (
+            <div className="fixed inset-x-0 bottom-0 z-[60] max-h-[72vh] overflow-y-auto border-t border-vault-border bg-vault-surface p-4 lg:hidden">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+                  Session detail
+                </p>
+                <button
+                  onClick={() => setSel(null)}
+                  aria-label="Close session"
+                  className="text-vault-faint hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <SessionEditor
+                session={selectedSession}
+                onUpdate={(fn) => updateSession(sel, fn)}
+                onPickLibrary={addFromLibrary}
+                cueFor={cueFor}
+              />
+            </div>
+          )}
         </div>
       )}
 

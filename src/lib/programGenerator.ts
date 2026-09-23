@@ -29,6 +29,7 @@ export interface GeneratedExercise {
   reps: number
   kg: number // left at 0 — the coach sets working loads
   rpe: number
+  rest: number // seconds, from goal rules — the coach can override
 }
 
 export interface GeneratedSession {
@@ -54,15 +55,16 @@ interface GoalParams {
   sets: number
   repsRange: [number, number]
   rpe: number
+  rest: [number, number] // seconds between sets / after a pair
 }
 
 const GOAL_PARAMS: Record<GoalId, GoalParams> = {
-  fat_loss: { label: 'Fat Loss', sets: 3, repsRange: [12, 15], rpe: 7 },
-  muscle: { label: 'Build Muscle', sets: 3, repsRange: [8, 12], rpe: 7 },
-  strength: { label: 'Strength', sets: 4, repsRange: [3, 6], rpe: 8 },
-  recomposition: { label: 'Recomposition', sets: 3, repsRange: [8, 10], rpe: 7 },
-  performance: { label: 'Performance', sets: 4, repsRange: [5, 8], rpe: 8 },
-  general: { label: 'General Health', sets: 2, repsRange: [10, 12], rpe: 6 },
+  fat_loss: { label: 'Fat Loss', sets: 3, repsRange: [12, 15], rpe: 7, rest: [45, 60] },
+  muscle: { label: 'Build Muscle', sets: 3, repsRange: [8, 12], rpe: 7, rest: [60, 90] },
+  strength: { label: 'Strength', sets: 4, repsRange: [3, 6], rpe: 8, rest: [150, 180] },
+  recomposition: { label: 'Recomposition', sets: 3, repsRange: [8, 10], rpe: 7, rest: [60, 60] },
+  performance: { label: 'Performance', sets: 4, repsRange: [5, 8], rpe: 8, rest: [90, 120] },
+  general: { label: 'General Health', sets: 2, repsRange: [10, 12], rpe: 6, rest: [45, 60] },
 }
 
 const EXPERIENCE_LABELS: Record<ExperienceId, string> = {
@@ -346,7 +348,8 @@ export function generateProgram(input: GeneratorInput, library: LibraryExercise[
           const cond = isConditioning(ex.name)
           const reps = cond ? 1 : Math.max(1, Math.floor((goal.repsRange[0] + goal.repsRange[1]) / 2))
           const rpe = Math.max(5, goal.rpe - (input.experience === 'beginner' ? 1 : 0))
-          exercises.push({ name: ex.name, sets: goal.sets, reps, kg: 0, rpe })
+          const rest = cond ? 60 : Math.round((goal.rest[0] + goal.rest[1]) / 2)
+          exercises.push({ name: ex.name, sets: goal.sets, reps, kg: 0, rpe, rest })
         }
       }
       if (missed.length > 0) {
