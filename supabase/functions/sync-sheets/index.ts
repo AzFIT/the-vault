@@ -502,7 +502,7 @@ function tabRange(tab: TemplateTab, suffix: string): string {
 
 async function readTab(token: string, sheetId: string, tab: TemplateTab): Promise<string[][]> {
   const meta = TEMPLATE_TABS[tab]
-  const range = tabRange(tab, `B1:${meta.lastCol}1200`)
+  const range = tabRange(tab, `B1:${meta.lastCol}5000`)
   const res = await gfetch(
     token,
     `/spreadsheets/${sheetId}/values:batchGet?majorDimension=ROWS&ranges=${encodeURIComponent(range)}`,
@@ -514,7 +514,7 @@ async function readTab(token: string, sheetId: string, tab: TemplateTab): Promis
 /** Clear only the data region of a tab — banner + header rows are preserved. */
 async function clearTabData(token: string, sheetId: string, tab: TemplateTab): Promise<void> {
   const meta = TEMPLATE_TABS[tab]
-  const range = tabRange(tab, `B${meta.dataStart}:${meta.lastCol}1200`)
+  const range = tabRange(tab, `B${meta.dataStart}:${meta.lastCol}5000`)
   await gfetch(token, `/spreadsheets/${sheetId}/values:batchClear`, {
     method: 'POST',
     body: JSON.stringify({ ranges: [range] }),
@@ -666,11 +666,20 @@ async function templatePull(sb: SB, token: string, sheetId: string) {
       bmi: num(row[10]),
       notes: str(row[11]) || null,
     }
+    // Match by calendar day — the sheet stores dates only while app rows may
+    // carry time-of-day timestamps, so exact-timestamp matching duplicates
+    // rows on every round-trip. Days may have multiple rows (double-logged),
+    // so take the first match deterministically instead of maybeSingle, which
+    // errors on multiple rows and used to fall through to duplicate inserts.
+    const dayEnd = new Date(new Date(rec).getTime() + 24 * 3600 * 1000).toISOString()
     const { data: ex } = await db
       .from('body_composition')
       .select('id')
       .eq('client_id', client.id)
-      .eq('recorded_at', rec)
+      .gte('recorded_at', rec)
+      .lt('recorded_at', dayEnd)
+      .order('recorded_at', { ascending: true })
+      .limit(1)
       .maybeSingle()
     if (ex) {
       const { error } = await db.from('body_composition').update(payload).eq('id', ex.id)
@@ -717,6 +726,8 @@ async function templatePull(sb: SB, token: string, sheetId: string) {
       .eq('client_id', client.id)
       .gte('completed_at', date)
       .lt('completed_at', dayEnd)
+      .order('completed_at', { ascending: true })
+      .limit(1)
       .maybeSingle()
     let logId: string
     if (parent) {
