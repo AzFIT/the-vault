@@ -23,6 +23,7 @@ import {
   User,
 } from 'lucide-react'
 import { asset } from '@/lib/utils'
+import { requestVaultEntry } from '@/lib/vaultEntry'
 import {
   createAccount,
   getCurrentAccount,
@@ -122,7 +123,12 @@ function AuthCard({ onAuthed }: { onAuthed: () => void }) {
         ? createAccount({ firstName, lastName, email, phone, password })
         : signInAccount(email, password)
     if (result.error) setError(result.error)
-    else onAuthed()
+    else {
+      onAuthed()
+      // Play the vault-entry ceremony over the app home appearing —
+      // empty destination: no navigation, the overlay just covers the reveal.
+      requestVaultEntry('')
+    }
   }
 
   const FIELD =

@@ -7,20 +7,20 @@
  * go-live.
  */
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, LockKeyhole } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { MEMBER_PROFILES, getMemberProfile, signInAsMember } from '@/lib/member'
+import { requestVaultEntry } from '@/lib/vaultEntry'
 
 export default function MemberLogin() {
-  const navigate = useNavigate()
   const [selected, setSelected] = useState('rachel-cheung')
   const selectedProfile = getMemberProfile(selected)
 
   const enter = () => {
     const profile = signInAsMember(selected)
-    if (profile) navigate(profile.home, { replace: true })
+    if (profile) requestVaultEntry(profile.home)
   }
 
   return (

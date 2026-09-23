@@ -15,12 +15,13 @@
  * credential map for an API call — routing and sessions stay identical.
  */
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, KeyRound, Lock } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { STAFF_PROFILES, getProfile, signInAs } from '@/lib/staff'
 import { signInAsMember } from '@/lib/member'
+import { requestVaultEntry } from '@/lib/vaultEntry'
 
 interface TesterAccount {
   /** accepted logins (case-insensitive) */
@@ -49,7 +50,6 @@ const INPUT_CLASS =
   'w-full border border-vault-border bg-vault-bg px-3 py-2.5 text-[13px] text-white placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none'
 
 export default function PortalLogin() {
-  const navigate = useNavigate()
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -69,12 +69,12 @@ export default function PortalLogin() {
     }
     if (account.session.kind === 'staff') signInAs(account.session.id)
     else signInAsMember(account.session.id)
-    navigate(account.home, { replace: true })
+    requestVaultEntry(account.home)
   }
 
   const enter = () => {
     const profile = signInAs(selected)
-    if (profile) navigate(profile.home, { replace: true })
+    if (profile) requestVaultEntry(profile.home)
   }
 
   return (

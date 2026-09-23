@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import AppShell from './components/AppShell'
 import PortalShell from './components/PortalShell'
 import FrontDeskShell from './components/FrontDeskShell'
+import VaultEntry from './components/VaultEntry'
 
 // Code-split pages — each route chunk loads on demand.
 const Home = lazy(() => import('./pages/Home'))
@@ -51,7 +52,11 @@ export default function App() {
   // a page chunk loads.
   const page = (el: ReactNode) => <Suspense fallback={<PageFallback />}>{el}</Suspense>
   return (
-    <Routes>
+    <>
+      {/* Vault-entry ceremony overlay — renders above every route; PortalLogin
+          and the Member App request it via a window event before navigating */}
+      <VaultEntry />
+      <Routes>
       {/* Marketing site — Navbar/Footer chrome */}
       <Route element={<Layout />}>
         <Route index element={page(<Home />)} />
@@ -121,5 +126,6 @@ export default function App() {
         <Route path="/portal/desk-enquiries" element={page(<Enquiries />)} />
       </Route>
     </Routes>
+    </>
   )
 }
