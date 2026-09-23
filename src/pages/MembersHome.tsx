@@ -6,12 +6,13 @@
  *   Personal Training→ trainer directory with profiles
  *   My Membership    → current plan + upgrade / downgrade packages
  *
- * Draft status: all data is local mock shaped to the target SQL schema
+ * Draft status: data is local mock shaped to the target SQL schema
  * (classes / bookings / users with roles member·trainer·admin) so the
- * Supabase migration is a data-source swap, not a rewrite. Bookings here
- * are per-tab state only — no persistence yet.
+ * Supabase migration is a data-source swap, not a rewrite. Bookings persist
+ * in localStorage via classSchedule.ts and are shared with the homepage
+ * class-card popup.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import {
@@ -27,31 +28,19 @@ import {
 } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { getMemberProfile, getMemberSession, signOutMember } from '@/lib/member'
+import {
+  BOOKINGS_EVENT,
+  WEEK_CLASSES,
+  bookingFor,
+  bookClass,
+  cancelBooking,
+  spotsLeft,
+  waitlistCount,
+} from '@/lib/classSchedule'
 
 type View = 'home' | 'classes' | 'trainers' | 'membership'
 
-/* ---- mock schedule (will come from the `classes` table) ------------------ */
-
-interface ClassSlot {
-  id: string
-  name: string
-  day: string
-  time: string
-  coach: string
-  capacity: number
-  booked: number
-  tag: string
-}
-
-const WEEK_CLASSES: ClassSlot[] = [
-  { id: 'c1', name: 'HYROX Race Prep', day: 'Mon', time: '07:00 – 08:00', coach: 'Dan Kan', capacity: 12, booked: 9, tag: 'Race Prep' },
-  { id: 'c2', name: 'FitMama Strength', day: 'Mon', time: '10:30 – 11:30', coach: 'Ziggy Makant', capacity: 10, booked: 10, tag: "Women's Health" },
-  { id: 'c3', name: 'Conditioning Circuit', day: 'Tue', time: '18:30 – 19:30', coach: 'Marcus Lau', capacity: 14, booked: 6, tag: 'Conditioning' },
-  { id: 'c4', name: 'Olympic Lifting Club', day: 'Wed', time: '19:00 – 20:30', coach: 'Dan Kan', capacity: 8, booked: 5, tag: 'Strength' },
-  { id: 'c5', name: 'HYROX Race Prep', day: 'Thu', time: '07:00 – 08:00', coach: 'Marcus Lau', capacity: 12, booked: 11, tag: 'Race Prep' },
-  { id: 'c6', name: 'FitMama Strength', day: 'Fri', time: '10:30 – 11:30', coach: 'Ziggy Makant', capacity: 10, booked: 4, tag: "Women's Health" },
-  { id: 'c7', name: 'Weekend Engine', day: 'Sat', time: '09:00 – 10:00', coach: 'Dan Kan', capacity: 16, booked: 8, tag: 'Conditioning' },
-]
+/* ---- schedule + booking store (shared with the homepage class popup) ------ */
 
 /* ---- mock trainers (will come from `users` where role = 'trainer') -------- */
 
@@ -126,7 +115,18 @@ const viewTitle: Record<Exclude<View, 'home'>, string> = {
 export default function MembersHome() {
   const navigate = useNavigate()
   const [view, setView] = useState<View>('home')
-  const [bookedIds, setBookedIds] = useState<Set<string>>(new Set())
+  /** re-read the booking store whenever it changes (any surface can book) */
+  const [bookTick, setBookTick] = useState(0)
+  useEffect(() => {
+    const refresh = () => setBookTick((t) => t + 1)
+    window.addEventListener(BOOKINGS_EVENT, refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(BOOKINGS_EVENT, refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
+  void bookTick
   const session = getMemberSession()
   const member = session ? getMemberProfile(session.memberId) : undefined
 
@@ -135,13 +135,10 @@ export default function MembersHome() {
     navigate('/portal/login', { replace: true })
   }
 
-  const toggleBook = (id: string) =>
-    setBookedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  const toggleBook = (id: string) => {
+    if (bookingFor(id)) cancelBooking(id)
+    else bookClass(id)
+  }
 
   return (
     <div className="app-black min-h-[100dvh] bg-vault-bg text-white" style={{ background: '#0D0D0F' }}>
@@ -239,8 +236,9 @@ export default function MembersHome() {
               {view === 'classes' && (
                 <div className="mt-6 space-y-2">
                   {WEEK_CLASSES.map((c) => {
-                    const spotsLeft = c.capacity - c.booked
-                    const isBooked = bookedIds.has(c.id)
+                    const mine = bookingFor(c.id)
+                    const left = spotsLeft(c)
+                    const waiting = waitlistCount(c.id)
                     return (
                       <div key={c.id} className="flex flex-wrap items-center gap-3 border border-vault-border bg-vault-surface/50 px-4 py-3.5">
                         <div className="min-w-[86px]">
@@ -254,27 +252,33 @@ export default function MembersHome() {
                         <span className="hidden border border-vault-border px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-vault-muted sm:inline-block">
                           {c.tag}
                         </span>
-                        <span className={`text-[11px] ${spotsLeft <= 2 ? 'text-gold' : 'text-vault-muted'}`}>
-                          {isBooked ? 'Booked ✓' : spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft === 1 ? '' : 's'} left` : 'Full — waitlist'}
+                        <span className={`text-[11px] ${!mine && left <= 2 ? 'text-gold' : 'text-vault-muted'}`}>
+                          {mine?.status === 'confirmed'
+                            ? 'Booked ✓'
+                            : mine?.status === 'waitlisted'
+                              ? `Waitlisted · #${waiting}`
+                              : left > 0
+                                ? `${left} spot${left === 1 ? '' : 's'} left`
+                                : `Full · ${waiting} on waitlist`}
                         </span>
                         <button
                           type="button"
                           onClick={() => toggleBook(c.id)}
                           className={`px-4 py-2 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                            isBooked
+                            mine
                               ? 'border border-gold/60 text-gold hover:border-gold'
-                              : spotsLeft > 0
+                              : left > 0
                                 ? 'bg-gold text-vault-btn-text hover:opacity-90'
                                 : 'border border-vault-border text-vault-muted hover:border-gold/50 hover:text-gold'
                           }`}
                         >
-                          {isBooked ? 'Cancel' : spotsLeft > 0 ? 'Book' : 'Waitlist'}
+                          {mine ? 'Cancel' : left > 0 ? 'Book' : 'Waitlist'}
                         </button>
                       </div>
                     )
                   })}
                   <p className="pt-2 text-[11px] text-vault-faint">
-                    Mock schedule — bookings confirm in this tab only until the backend ships.
+                    Mock schedule — bookings are shared with the homepage class popup and persist in this browser until the backend ships.
                   </p>
                 </div>
               )}

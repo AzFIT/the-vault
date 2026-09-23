@@ -19,6 +19,7 @@ import {
 import { asset } from '@/lib/utils'
 import { membershipPlans, introPackage, formatHKD } from '@/data/mock'
 import EnquiryModal from '@/components/enquiry/EnquiryModal'
+import ClassBookingModal from '@/components/enquiry/ClassBookingModal'
 
 const scrollToId = (id: string) =>
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -280,6 +281,7 @@ const CLASSES = [
 ]
 
 function ClassStrip() {
+  const [activeClass, setActiveClass] = useState<string | null>(null)
   return (
     <section id="classes" className="bg-[#0D0D0F] py-14 md:py-20">
       <div className="mx-auto max-w-[1600px] px-4 md:px-6">
@@ -289,9 +291,10 @@ function ClassStrip() {
         <div className="strip-no-bar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-3 lg:gap-6 lg:overflow-visible">
           {CLASSES.map(({ name, chip, chipLabel, Icon }, i) => (
             <Rise key={name} delay={i * 90} className="w-[70vw] shrink-0 snap-start lg:w-auto">
-              <Link
-                to="/intake?mode=trial"
-                className="card group flex h-full flex-col gap-5 transition-colors duration-300 hover:!border-[rgba(212,175,55,0.4)]"
+              <button
+                type="button"
+                onClick={() => setActiveClass(name)}
+                className="card group flex h-full w-full flex-col gap-5 text-left transition-colors duration-300 hover:!border-[rgba(212,175,55,0.4)]"
               >
                 <div className="flex items-center justify-between">
                   <Icon size={26} strokeWidth={1.5} color="#D4AF37" aria-hidden />
@@ -306,11 +309,12 @@ function ClassStrip() {
                     Book now <ArrowRight size={13} aria-hidden />
                   </span>
                 </div>
-              </Link>
+              </button>
             </Rise>
           ))}
         </div>
       </div>
+      {activeClass && <ClassBookingModal cardName={activeClass} onClose={() => setActiveClass(null)} />}
     </section>
   )
 }
