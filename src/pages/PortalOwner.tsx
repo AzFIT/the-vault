@@ -20,8 +20,9 @@ import {
   gymClasses,
   monthlyRevenue,
 } from '@/data/mock'
-import { CountUp, SectionHeader } from '@/components/coach/shared'
+import { CountUp, GridAvatar, SectionHeader } from '@/components/coach/shared'
 import { NOW_LABEL_MINUTES, TODAY_SCHEDULE, timeToMinutes } from '@/components/coach/scheduleData'
+import { getProfile, listAllTodayEvents } from '@/lib/staff'
 import {
   ENQUIRIES_CHANGED_EVENT,
   countNewEnquiries,
@@ -466,8 +467,64 @@ function RiskPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Right rail — notifications + yesterday's summary
+// Right rail — recent check-ins (live ops feed) + notifications + yesterday
 // ---------------------------------------------------------------------------
+
+/** Live check-in feed across every staff shift — updates cross-tab via the
+ *  storage event; the wireframe's "Recent Check-ins" column, Vault skin. */
+function RecentCheckinsPanel() {
+  const [events, setEvents] = useState(() => listAllTodayEvents('checkin').slice(0, 8))
+  useEffect(() => {
+    const refresh = () => setEvents(listAllTodayEvents('checkin').slice(0, 8))
+    window.addEventListener('storage', refresh)
+    return () => window.removeEventListener('storage', refresh)
+  }, [])
+
+  return (
+    <section className="app-card p-5" aria-label="Recent check-ins">
+      <h3 className="mb-3 flex items-baseline justify-between text-[15px] font-bold">
+        Recent check-ins
+        <span className="tnum text-[11px] font-normal text-vault-faint">{events.length}</span>
+      </h3>
+      <ul>
+        {events.map((e) => {
+          const isDropIn = e.label.startsWith('Drop-in')
+          const staff = getProfile(e.staffId)
+          return (
+            <li
+              key={e.id}
+              className="flex items-center gap-2.5 border-b border-vault-border/60 py-2.5 text-[13px] last:border-0"
+            >
+              <span className="tnum w-11 shrink-0 text-vault-faint">
+                {new Date(e.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <GridAvatar name={staff?.name ?? e.staffId} size={24} />
+              <span className="min-w-0 flex-1 truncate text-white/90">{e.label}</span>
+              <span
+                className={`shrink-0 border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] ${
+                  isDropIn ? 'border-gold text-gold' : 'border-[#7ec98f] text-[#7ec98f]'
+                }`}
+              >
+                {isDropIn ? 'Drop-in' : 'Member'}
+              </span>
+            </li>
+          )
+        })}
+        {events.length === 0 && (
+          <li className="py-6 text-center text-[13px] text-vault-faint">
+            No check-ins logged yet today.
+          </li>
+        )}
+      </ul>
+      <Link
+        to="/portal/ops/check-in"
+        className="mt-3 inline-block text-[11px] uppercase tracking-[0.1em] text-gold transition-colors hover:text-white"
+      >
+        Open check in →
+      </Link>
+    </section>
+  )
+}
 
 function Rail() {
   const newEnquiries = countNewEnquiries()
@@ -485,6 +542,7 @@ function Rail() {
 
   return (
     <div className="space-y-6">
+      <RecentCheckinsPanel />
       <section className="app-card p-5" aria-label="Notifications">
         <h3 className="mb-3 text-[15px] font-bold">Notifications</h3>
         <div className="space-y-3">

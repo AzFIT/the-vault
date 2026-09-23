@@ -162,6 +162,20 @@ export function listTodayEvents(staffId: string): ShiftEvent[] {
   return listEvents(staffId).filter((e) => e.day === localDay())
 }
 
+/** Today's events across ALL staff, newest first — the owner-dashboard
+ *  operations feed (recent check-ins, sales…) that spans every shift. */
+export function listAllTodayEvents(type?: ShiftEventType): ShiftEvent[] {
+  try {
+    const raw = localStorage.getItem(EVENTS_KEY)
+    const all: ShiftEvent[] = raw ? JSON.parse(raw) : []
+    return all
+      .filter((e) => e.day === localDay() && (!type || e.type === type))
+      .sort((a, b) => b.at.localeCompare(a.at))
+  } catch {
+    return []
+  }
+}
+
 export function countToday(staffId: string, type: ShiftEventType): number {
   return listTodayEvents(staffId).filter((e) => e.type === type).length
 }

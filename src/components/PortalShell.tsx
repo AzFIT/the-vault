@@ -19,6 +19,7 @@ import { ENQUIRIES_CHANGED_EVENT, countNewEnquiries } from '@/lib/enquiries'
 import { getCurrentProfile, signOut } from '@/lib/staff'
 import { asset } from '@/lib/utils'
 import NavButtons from '@/components/NavButtons'
+import PortalSearch from '@/components/PortalSearch'
 
 interface PortalNavItem {
   label: string
@@ -313,12 +314,15 @@ export default function PortalShell() {
               <p className="text-[10px] uppercase tracking-[0.2em] text-vault-muted">{chrome.eyebrow}</p>
               <h1 className="text-lg font-bold leading-tight">{chrome.title}</h1>
             </div>
-            <span className="ml-auto hidden border border-gold/50 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-gold sm:inline-block">
-              Tester mode — signed in as {profile.name}
-            </span>
-            <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-gold/50 bg-gold/10 text-[11px] text-gold sm:flex">
-              {profile.initials}
-            </span>
+            <div className="ml-auto flex items-center gap-3">
+              <PortalSearch />
+              <span className="hidden border border-gold/50 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-gold sm:inline-block">
+                Tester mode — signed in as {profile.name}
+              </span>
+              <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-gold/50 bg-gold/10 text-[11px] text-gold sm:flex">
+                {profile.initials}
+              </span>
+            </div>
           </header>
           <main className="mx-auto w-full max-w-[1280px] p-4 md:p-8">
             <Outlet />
