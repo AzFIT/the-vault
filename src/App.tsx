@@ -20,6 +20,7 @@ const PortalInsights = lazy(() => import('./pages/PortalInsights'))
 const PortalInsightsReport = lazy(() => import('./pages/PortalInsightsReport'))
 const PortalSettings = lazy(() => import('./pages/PortalSettings'))
 const PortalServices = lazy(() => import('./pages/PortalServices'))
+const PortalRooms = lazy(() => import('./pages/PortalRooms'))
 const PlanSummary = lazy(() => import('./pages/PlanSummary'))
 const Enquiries = lazy(() => import('./pages/Enquiries'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="/portal/insights" element={page(<PortalInsights />)} />
         <Route path="/portal/settings" element={page(<PortalSettings />)} />
         <Route path="/portal/services" element={page(<PortalServices />)} />
+        <Route path="/portal/rooms" element={page(<PortalRooms />)} />
         {/* Owner-context duplicates of shared work surfaces — same page
             components, but rendered inside the owner shell so the sidebar
             stays the owner's. The /portal/check-in + /portal/pos routes
