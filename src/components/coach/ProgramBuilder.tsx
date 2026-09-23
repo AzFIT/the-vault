@@ -18,6 +18,7 @@ import {
   Save,
   Trash2,
   Upload,
+  Wand2,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -47,6 +48,8 @@ import {
   sheetUrl,
 } from '@/lib/sheetsSync'
 import ExercisePicker from './ExercisePicker'
+import GenerateProgramDialog from './GenerateProgramDialog'
+import type { GeneratedProgram } from '@/lib/programGenerator'
 import TemplateSyncCard from './TemplateSyncCard'
 import { SectionHeader } from './shared'
 import { EASE } from './utils'
@@ -231,6 +234,7 @@ export default function ProgramBuilder({
   const [clients, setClients] = useState<ClientSummary[]>([])
   const [sheetBusy, setSheetBusy] = useState<string | null>(null)
   const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
+  const [genOpen, setGenOpen] = useState(false)
   const customCount = useRef(0)
 
   /** Fetch the trainer's Supabase programs (incl. seeded GBC template). */
@@ -560,6 +564,55 @@ export default function ProgramBuilder({
     setSel(null)
   }
 
+  /** Turn a generated program into a new editable custom draft. */
+  const applyGenerated = (g: GeneratedProgram) => {
+    customCount.current += 1
+    const id = `gen-${customCount.current}`
+    const makeWeek = (): Week => ({
+      id: nextId('wk'),
+      days: DAY_LABELS.map((label, d) => {
+        const session = g.weeks[0][d]
+        return {
+          id: nextId('day'),
+          label,
+          sessions: session
+            ? [
+                {
+                  id: nextId('sess'),
+                  title: session.title,
+                  exercises: session.exercises.map((e) => ({
+                    id: nextId('ex'),
+                    exercise: e.name,
+                    sets: e.sets,
+                    reps: e.reps,
+                    kg: e.kg,
+                    rpe: e.rpe,
+                  })),
+                },
+              ]
+            : [],
+        }
+      }),
+    })
+    const draft: ProgramDraft = {
+      id,
+      name: g.name,
+      subtitle: `${g.weeks.length} wk · generated · ${g.goalLabel} · ${g.experienceLabel}`,
+      custom: true,
+      weeks: Array.from({ length: g.weeks.length }, makeWeek),
+    }
+    setDrafts((prev) => ({ ...prev, [id]: draft }))
+    setOrder((prev) => [...prev, id])
+    setSelectedId(id)
+    setSel(null)
+    setAssignOpen(false)
+    if (g.warnings.length > 0) {
+      toast.warning(`"${g.name}" generated — note: ${g.warnings[0]}${g.warnings.length > 1 ? ` (+${g.warnings.length - 1} more)` : ''}`)
+    } else {
+      toast.success(`"${g.name}" generated — ${g.weeks.length} weeks ready to edit`)
+    }
+  }
+
   /**
    * Map the calendar-style draft onto the Supabase template shape: week 1's
    * sessions become the session templates (workouts), later weeks are the
@@ -658,6 +711,12 @@ export default function ProgramBuilder({
               className="inline-flex items-center gap-2 border border-white/70 px-4 py-2 text-[11px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white/10 disabled:opacity-50"
             >
               <Save className="h-3.5 w-3.5" /> {saving ? 'Saving…' : 'Save changes'}
+            </button>
+            <button
+              onClick={() => setGenOpen(true)}
+              className="inline-flex items-center gap-2 border border-vault-gold/60 px-4 py-2 text-[11px] uppercase tracking-[0.08em] text-vault-gold transition-colors hover:bg-vault-gold/10"
+            >
+              <Wand2 className="h-3.5 w-3.5" /> Generate
             </button>
             <button
               onClick={addProgram}
@@ -1215,6 +1274,8 @@ export default function ProgramBuilder({
           )}
         </div>
       </div>
+
+      <GenerateProgramDialog open={genOpen} onClose={() => setGenOpen(false)} onApply={applyGenerated} />
     </section>
   )
 }
