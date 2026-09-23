@@ -383,6 +383,10 @@ export default function MembersHome() {
 
       <footer className="border-t border-vault-border px-4 py-6 text-center text-[11px] text-vault-faint">
         © 2026 The Vault Fitness · Member Home
+        <span className="mx-2 text-vault-border">·</span>
+        <Link to="/members/app" className="text-vault-muted transition-colors hover:text-gold">
+          Preview the member app →
+        </Link>
       </footer>
     </div>
   )
