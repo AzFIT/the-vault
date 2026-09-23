@@ -227,6 +227,20 @@ function Hero() {
         className="flex items-center bg-[#0D0D0F] px-5 py-16 md:px-12 md:py-24 lg:min-h-[calc(100svh-108px)] lg:py-0"
       >
         <div className="w-full max-w-xl">
+          {/* Golden vault — the staff entrance. Clicking it is the same as the
+              navbar's Staff button: straight to the portal sign-in. */}
+          <Link
+            to="/portal/login"
+            aria-label="Staff sign-in — open the management portal"
+            title="Staff sign-in"
+            className="hero-item group mb-8 inline-block"
+          >
+            <img
+              src={asset('brand/vault-door-gold.png')}
+              alt="The Vault door — staff entrance"
+              className="w-24 transition-all duration-500 group-hover:scale-105 group-hover:drop-shadow-[0_0_28px_rgba(212,175,55,0.35)] md:w-28"
+            />
+          </Link>
           <h1 className="hero-item h-display text-[34px] leading-[1.1] md:text-[56px]">
             Unlock your fitness <span className="gold-text">Potential</span>
           </h1>

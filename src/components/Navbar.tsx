@@ -68,8 +68,7 @@ export default function Navbar() {
         style={{ borderColor: 'rgba(212,175,55,0.15)' }}
       >
         <Link to="/" className="brand-logo" aria-label="The Vault Fitness — home">
-          <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="The Vault" className="!h-8 md:!h-9" />
-          <span className="brand-logo__wordmark hidden sm:inline">The Vault Fitness</span>
+          <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="The Vault Fitness" className="!h-8 md:!h-9" />
         </Link>
 
         <nav className="hidden items-center gap-7 lg:flex">
@@ -133,7 +132,6 @@ export default function Navbar() {
             >
               <span className="brand-logo">
                 <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="The Vault Fitness" className="!h-8" />
-                <span className="brand-logo__wordmark">The Vault Fitness</span>
               </span>
               <motion.button
                 aria-label="Close menu"

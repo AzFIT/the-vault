@@ -28,6 +28,7 @@ const Intake = lazy(() => import('./pages/Intake'))
 const PortalLogin = lazy(() => import('./pages/PortalLogin'))
 const PortalGate = lazy(() => import('./pages/PortalGate'))
 const MemberLogin = lazy(() => import('./pages/MemberLogin'))
+const MembersHome = lazy(() => import('./pages/MembersHome'))
 const FrontDesk = lazy(() => import('./pages/FrontDesk'))
 const FrontDeskCheckIn = lazy(() => import('./pages/FrontDeskCheckIn'))
 const FrontDeskPOS = lazy(() => import('./pages/FrontDeskPOS'))
@@ -106,6 +107,7 @@ export default function App() {
 
       {/* Member portal — golden-steel tester sign-in, mirrors the staff portal */}
       <Route path="/login" element={page(<MemberLogin />)} />
+      <Route path="/members" element={page(<MembersHome />)} />
 
       {/* Front desk — separate front-desk surface, role-gated (tester sign-in) */}
       <Route element={<FrontDeskShell />}>

@@ -52,7 +52,6 @@ export default function Footer() {
         <div>
           <span className="brand-logo brand-logo--sidebar mb-6">
             <img src={asset('brand/THEVAULT-logo-transparent.png')} alt="The Vault Fitness" />
-            <span className="brand-logo__wordmark">The Vault Fitness</span>
           </span>
           <ul className="space-y-3 text-[13px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
             <li className="flex gap-2.5">

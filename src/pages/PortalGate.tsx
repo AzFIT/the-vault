@@ -21,6 +21,8 @@ import {
   Play,
   Sheet,
   SkipForward,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import { asset } from '@/lib/utils'
 
@@ -28,43 +30,43 @@ const DESTINATIONS = [
   {
     to: '/portal/login',
     icon: KeyRound,
-    label: 'Management Portal',
+    label: 'Operations Portal',
     desc: 'Owner, front desk & coach sign-in',
   },
   {
-    to: '/login',
+    to: '/members',
     icon: LayoutDashboard,
-    label: 'Member Dashboard',
-    desc: "Today's plan, progress & check-ins",
+    label: 'Member Home',
+    desc: 'Classes, personal training & your plan',
   },
   {
     to: '/coach',
     icon: Dumbbell,
-    label: "Coach's Studio",
+    label: 'Coaching Studio',
     desc: 'Program builder & client programming',
   },
   {
     to: '/sheets',
     icon: Sheet,
-    label: 'Tracking Sheets',
+    label: 'Performance Records',
     desc: 'Workouts, measurements & testing',
   },
   {
     to: '/intake?mode=trial',
     icon: CalendarCheck,
-    label: 'Book a Trial',
+    label: 'Book a Trial Session',
     desc: 'First-session intake & assessment',
   },
   {
     to: '/#memberships',
     icon: CreditCard,
-    label: 'Memberships',
+    label: 'Membership Plans',
     desc: 'Plans, pricing & what is included',
   },
   {
     to: '/',
     icon: Home,
-    label: 'Homepage',
+    label: 'Return to Website',
     desc: 'Back to the main site',
   },
 ]
@@ -75,6 +77,8 @@ export default function PortalGate() {
   const [phase, setPhase] = useState<'intro' | 'menu'>('intro')
   /** true when the browser blocked even muted autoplay — show a play button */
   const [blocked, setBlocked] = useState(false)
+  /** audio starts muted (browser autoplay policy); user can unmute any time */
+  const [muted, setMuted] = useState(true)
 
   const reducedMotion =
     typeof window !== 'undefined' &&
@@ -87,6 +91,10 @@ export default function PortalGate() {
     }
     const v = videoRef.current
     if (!v) return
+    // React doesn't reliably apply the muted prop before the first play
+    // attempt — set the property imperatively so muted autoplay is never
+    // blocked by the browser's sound policy.
+    v.muted = true
     const attempt = v.play()
     if (attempt) {
       attempt.catch(() => setBlocked(true))
@@ -97,7 +105,18 @@ export default function PortalGate() {
   const startFromButton = () => {
     const v = videoRef.current
     setBlocked(false)
-    if (v) v.play().catch(() => setBlocked(true))
+    setMuted(false) // a user gesture unlocks audio — play the intro with sound
+    if (v) {
+      v.muted = false
+      v.play().catch(() => setBlocked(true))
+    }
+  }
+
+  const toggleMute = () => {
+    const v = videoRef.current
+    const next = !muted
+    setMuted(next)
+    if (v) v.muted = next
   }
 
   return (
@@ -132,10 +151,11 @@ export default function PortalGate() {
             <div className="relative flex min-h-0 flex-1 items-center justify-center px-6">
               <video
                 ref={videoRef}
-                src={asset('vault-intro.mp4')}
-                poster={asset('brand/vault-intro-poster.jpg')}
-                muted
+                src={asset('vault-intro-2.mp4')}
+                poster={asset('brand/vault-intro-2-poster.jpg')}
+                muted={muted}
                 playsInline
+                autoPlay
                 preload="auto"
                 onEnded={() => setPhase('menu')}
                 className="max-h-[62dvh] w-auto max-w-full object-contain"
@@ -159,17 +179,27 @@ export default function PortalGate() {
               )}
             </div>
 
-            {/* Caption + skip */}
-            <div className="relative z-20 flex items-end justify-between px-6 pb-8 md:px-10">
+            {/* Caption + sound toggle + skip */}
+            <div className="relative z-20 flex items-end justify-between gap-4 px-6 pb-8 md:px-10">
               <p className="text-[11px] uppercase tracking-[0.22em] text-vault-faint">
                 The Vault Fitness · Hong Kong
               </p>
-              <button
-                onClick={() => setPhase('menu')}
-                className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-vault-muted transition-colors hover:text-gold"
-              >
-                Skip intro <SkipForward className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-5">
+                <button
+                  onClick={toggleMute}
+                  aria-label={muted ? 'Unmute intro audio' : 'Mute intro audio'}
+                  className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-vault-muted transition-colors hover:text-gold"
+                >
+                  {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                  {muted ? 'Sound off' : 'Sound on'}
+                </button>
+                <button
+                  onClick={() => setPhase('menu')}
+                  className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-vault-muted transition-colors hover:text-gold"
+                >
+                  Skip intro <SkipForward className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </motion.div>
         ) : (
@@ -182,7 +212,7 @@ export default function PortalGate() {
           >
             {/* Vault door seal, small, above the heading */}
             <motion.img
-              src={asset('brand/vault-door.png')}
+              src={asset('brand/vault-door-gold.png')}
               alt=""
               aria-hidden
               initial={{ opacity: 0, scale: 0.85 }}

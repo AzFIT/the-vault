@@ -50,7 +50,7 @@ export default function MemberLogin() {
           <div className="relative">
             <div className="gold-ring pointer-events-none absolute inset-0 rounded-full" />
             <img
-              src={asset('brand/vault-door.png')}
+              src={asset('brand/vault-door-gold.png')}
               alt="The Vault door"
               className="vault-door-spin relative w-52 md:w-64"
               style={{ filter: 'drop-shadow(0 18px 42px rgba(0,0,0,0.6))' }}

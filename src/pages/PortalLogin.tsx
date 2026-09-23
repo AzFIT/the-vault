@@ -1,26 +1,75 @@
 /**
- * Portal login — Phase A "tester sign-in". No passwords yet: pick a profile
- * and you're in. The chosen profile is stored as the staff session (role +
- * staff ID) and routes each role to its home surface:
+ * Portal login — unified tester sign-in for every role. A golden-steel
+ * sign-in card accepts an email OR username plus password (any password in
+ * tester mode) and routes each account to its home surface:
  *
- *   Owner      → /manage       (graduates to /portal in a later phase)
- *   Front desk → /portal/front-desk
- *   Coach      → /coach
+ *   owner@vault.hk / ownerdan   → /portal              (Owner)
+ *   staff@vault.hk / vaultstaff → /portal/front-desk   (Front desk)
+ *   trainer@vault.hk / trainer  → /coach               (Coach)
+ *   client@vault.hk / client    → /dashboard           (Client)
+ *   members@vault.hk / members  → /members             (Member home)
  *
- * A "Tester mode" banner stays on portal screens until real auth (Supabase)
- * ships. Back to homepage is always one click.
+ * A real session (staff or member) is created on success, so portals stay
+ * signed in across pages. Below the card, the original profile quick-pick
+ * remains for one-click previews. When Supabase auth ships, swap the
+ * credential map for an API call — routing and sessions stay identical.
  */
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, KeyRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, KeyRound, Lock } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { STAFF_PROFILES, getProfile, signInAs } from '@/lib/staff'
+import { signInAsMember } from '@/lib/member'
+
+interface TesterAccount {
+  /** accepted logins (case-insensitive) */
+  match: string[]
+  name: string
+  roleLabel: string
+  /** session to create: staff profile id or member profile id */
+  session: { kind: 'staff'; id: string } | { kind: 'member'; id: string }
+  home: string
+}
+
+const TESTER_ACCOUNTS: TesterAccount[] = [
+  { match: ['owner@vault.hk', 'ownerdan'], name: 'Dan Kan', roleLabel: 'Owner', session: { kind: 'staff', id: 'dan-kan' }, home: '/portal' },
+  { match: ['staff@vault.hk', 'vaultstaff'], name: 'Rachel Cheung', roleLabel: 'Front desk', session: { kind: 'staff', id: 'rachel-cheung' }, home: '/portal/front-desk' },
+  { match: ['trainer@vault.hk', 'trainer'], name: 'Ziggy Makant', roleLabel: 'Coach', session: { kind: 'staff', id: 'ziggy-makant' }, home: '/coach' },
+  { match: ['client@vault.hk', 'client'], name: 'Marcus Lau', roleLabel: 'Client', session: { kind: 'member', id: 'marcus-lau' }, home: '/dashboard' },
+  { match: ['members@vault.hk', 'members'], name: 'Rachel Cheung', roleLabel: 'Member', session: { kind: 'member', id: 'rachel-cheung' }, home: '/members' },
+]
+
+const findAccount = (login: string) => {
+  const key = login.trim().toLowerCase()
+  return TESTER_ACCOUNTS.find((a) => a.match.includes(key))
+}
+
+const INPUT_CLASS =
+  'w-full border border-vault-border bg-vault-bg px-3 py-2.5 text-[13px] text-white placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none'
 
 export default function PortalLogin() {
   const navigate = useNavigate()
+  const [login, setLogin] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState('rachel-cheung')
   const selectedProfile = getProfile(selected)
+
+  const enterWithCard = () => {
+    const account = findAccount(login)
+    if (!account) {
+      setError('Unknown account — try owner@vault.hk, staff@vault.hk, trainer@vault.hk, client@vault.hk or members@vault.hk.')
+      return
+    }
+    if (!password.trim()) {
+      setError('Enter any password — real authentication arrives with the backend.')
+      return
+    }
+    if (account.session.kind === 'staff') signInAs(account.session.id)
+    else signInAsMember(account.session.id)
+    navigate(account.home, { replace: true })
+  }
 
   const enter = () => {
     const profile = signInAs(selected)
@@ -51,7 +100,7 @@ export default function PortalLogin() {
           <div className="relative">
             <div className="gold-ring pointer-events-none absolute inset-0 rounded-full" />
             <img
-              src={asset('brand/vault-door.png')}
+              src={asset('brand/vault-door-gold.png')}
               alt="The Vault door"
               className="vault-door-spin relative w-52 md:w-64"
               style={{ filter: 'drop-shadow(0 18px 42px rgba(0,0,0,0.6))' }}
@@ -61,19 +110,18 @@ export default function PortalLogin() {
             className="gold-metal-text mt-9 text-3xl md:text-4xl"
             style={{ fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.08em' }}
           >
-            MANAGEMENT PORTAL
+            PORTAL ACCESS
           </h1>
           <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-vault-muted">
-            Scheduling, revenue and staff performance — the studio at a glance,
-            before the first coffee.
+            One door, every room — sign in and the vault opens to your portal.
           </p>
           <p className="mt-7 flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-vault-faint">
             <KeyRound className="h-3.5 w-3.5 text-gold/80" />
-            Staff only · Authorized access
+            Authorized access only
           </p>
         </div>
 
-        <p className="relative mt-6 text-[11px] text-vault-faint">© 2026 The Vault Fitness · Staff only</p>
+        <p className="relative mt-6 text-[11px] text-vault-faint">© 2026 The Vault Fitness · Staff & members</p>
       </div>
 
       {/* Sign-in panel */}
@@ -84,13 +132,65 @@ export default function PortalLogin() {
           transition={{ duration: 0.4, ease: 'easeOut' }}
           className="w-full max-w-md"
         >
-          <p className="eyebrow">Tester sign-in</p>
-          <p className="mt-3 text-[13px] leading-relaxed text-vault-muted">
-            Choose a profile to preview the portal. No password in this phase —
-            real accounts arrive when the backend does.
-          </p>
+          {/* ——— The sign-in card ——— */}
+          <div className="border border-vault-border bg-vault-surface/60 p-6">
+            <p className="eyebrow flex items-center gap-2">
+              <Lock className="h-3.5 w-3.5 text-gold/80" /> Sign in
+            </p>
+            <div className="mt-5 space-y-3">
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-[0.16em] text-vault-muted" htmlFor="pl-login">
+                  Email or username
+                </label>
+                <input
+                  id="pl-login"
+                  className={INPUT_CLASS}
+                  placeholder="owner@vault.hk · vaultstaff · trainer…"
+                  value={login}
+                  autoComplete="username"
+                  onChange={(e) => {
+                    setLogin(e.target.value)
+                    setError(null)
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && enterWithCard()}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-[0.16em] text-vault-muted" htmlFor="pl-pass">
+                  Password
+                </label>
+                <input
+                  id="pl-pass"
+                  type="password"
+                  className={INPUT_CLASS}
+                  placeholder="Any password in tester mode"
+                  value={password}
+                  autoComplete="current-password"
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    setError(null)
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && enterWithCard()}
+                />
+              </div>
+              {error && (
+                <p className="border border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] leading-snug text-red-300">
+                  {error}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={enterWithCard}
+                className="flex w-full items-center justify-center gap-2 bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.14em] text-vault-btn-text transition-opacity hover:opacity-85"
+              >
+                Open the vault <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
 
-          <div className="mt-6 space-y-2" role="radiogroup" aria-label="Staff profile">
+          {/* ——— Quick preview ——— */}
+          <p className="mt-7 text-[10px] uppercase tracking-[0.2em] text-vault-faint">Quick preview — staff profiles</p>
+          <div className="mt-3 space-y-2" role="radiogroup" aria-label="Staff profile">
             {STAFF_PROFILES.map((p) => {
               const active = selected === p.id
               return (
@@ -101,7 +201,7 @@ export default function PortalLogin() {
                   aria-checked={active}
                   onClick={() => setSelected(p.id)}
                   onDoubleClick={enter}
-                  className={`flex w-full items-center gap-3 border px-4 py-3.5 text-left transition-colors ${
+                  className={`flex w-full items-center gap-3 border px-4 py-3 text-left transition-colors ${
                     active
                       ? 'border-gold bg-white/[0.04]'
                       : 'border-vault-border bg-vault-surface hover:border-white/40'
@@ -135,9 +235,9 @@ export default function PortalLogin() {
           <button
             type="button"
             onClick={enter}
-            className="mt-6 flex w-full items-center justify-center gap-2 bg-white px-6 py-3.5 text-[12px] font-bold uppercase tracking-[0.14em] text-vault-btn-text transition-opacity hover:opacity-85"
+            className="btn-ghost mt-4 w-full text-[11px]"
           >
-            Enter as {selectedProfile?.name.split(' ')[0] ?? 'staff'} <ArrowRight className="h-4 w-4" />
+            Enter as {selectedProfile?.name.split(' ')[0] ?? 'staff'} <ArrowRight className="h-3.5 w-3.5" />
           </button>
 
           <div className="mt-5 flex items-center justify-between">

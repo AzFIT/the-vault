@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { LogOut, Lock, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { ENQUIRIES_CHANGED_EVENT, countNewEnquiries } from '@/lib/enquiries'
 import { getCurrentProfile, signOut } from '@/lib/staff'
 import { asset } from '@/lib/utils'
@@ -322,6 +322,18 @@ export default function PortalShell() {
               <span className="hidden h-9 w-9 items-center justify-center rounded-full border border-gold/50 bg-gold/10 text-[11px] text-gold sm:flex">
                 {profile.initials}
               </span>
+              <button
+                type="button"
+                onClick={() => {
+                  signOut()
+                  navigate('/portal/login', { replace: true })
+                }}
+                aria-label={`Lock out — sign out ${profile.name}`}
+                title="Lock out"
+                className="flex h-9 w-9 items-center justify-center border border-vault-border text-vault-muted transition-colors hover:border-gold/60 hover:text-gold"
+              >
+                <Lock className="h-4 w-4" strokeWidth={1.5} />
+              </button>
             </div>
           </header>
           <main className="mx-auto w-full max-w-[1280px] p-4 md:p-8">
