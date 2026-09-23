@@ -8,15 +8,16 @@
  *   Non-member          → intake form (contact details) so the team can
  *                         book them in manually and arrange payment
  *
- * Draft: bookings persist in localStorage via classSchedule.ts, shaped to
- * the target `bookings` SQL schema (confirmed / waitlisted).
+ * Bookings live in Supabase (`classes` + `bookings`, writes via the
+ * book-class edge function) and re-render here via BOOKINGS_EVENT.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowRight, CalendarCheck, Check, User, Users, X } from 'lucide-react'
 import {
   WEEK_CLASSES,
+  BOOKINGS_EVENT,
   bookingFor,
   bookClass,
   cancelBooking,
@@ -41,6 +42,11 @@ export default function ClassBookingModal({ cardName, onClose }: Props) {
   const [step, setStep] = useState<Step>('choose')
   const [, setTick] = useState(0)
   const refresh = () => setTick((t) => t + 1)
+  // Bookings are async cloud writes — re-render when the store notifies.
+  useEffect(() => {
+    window.addEventListener(BOOKINGS_EVENT, refresh)
+    return () => window.removeEventListener(BOOKINGS_EVENT, refresh)
+  }, [])
 
   const memberSession = getMemberSession()
   const member = memberSession ? getMemberProfile(memberSession.memberId) : undefined
