@@ -17,6 +17,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Search,
   Upload,
   Wand2,
   X,
@@ -222,6 +223,8 @@ export default function ProgramBuilder({
   const [dbPrograms, setDbPrograms] = useState<LoadedProgram[] | null>(null)
   const [dbLoading, setDbLoading] = useState(false)
   const [dbError, setDbError] = useState<string | null>(null)
+  /** Search filter — the program list stays hidden until something is typed. */
+  const [dbQuery, setDbQuery] = useState('')
   const [clients, setClients] = useState<ClientSummary[]>([])
   const [sheetBusy, setSheetBusy] = useState<string | null>(null)
   const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
@@ -1149,6 +1152,27 @@ export default function ProgramBuilder({
               </button>
             </div>
             <div className="p-2">
+              {/* Search-first: the full program list stays hidden until the
+                  trainer types — keeps the rail compact on busy rosters. */}
+              <div className="relative mb-1">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-vault-faint" />
+                <input
+                  value={dbQuery}
+                  onChange={(e) => setDbQuery(e.target.value)}
+                  placeholder="Search programs or clients…"
+                  aria-label="Search Supabase programs"
+                  className="w-full border border-vault-border bg-vault-bg py-1.5 pl-7 pr-2 text-[11px] text-white placeholder:text-vault-faint focus:border-vault-surface-3 focus:outline-none"
+                />
+                {dbQuery && (
+                  <button
+                    onClick={() => setDbQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-vault-faint transition-colors hover:text-white"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
               {sheetsConfigured === false && (
                 <p className="mb-1 border border-vault-border bg-vault-surface-2/40 px-2 py-1.5 text-[10px] leading-snug text-vault-faint">
                   Google Sheets sync not configured — add a service-account key
@@ -1174,7 +1198,28 @@ export default function ProgramBuilder({
                   No Supabase programs yet — build one and Save.
                 </p>
               )}
-              {dbPrograms?.map((p) => {
+              {dbPrograms && dbPrograms.length > 0 && !dbQuery && (
+                <p className="px-2 py-2 text-[10px] leading-snug text-vault-faint">
+                  <span className="tnum">{dbPrograms.length}</span> program
+                  {dbPrograms.length === 1 ? '' : 's'} on Supabase — type above to
+                  search by program or client name.
+                </p>
+              )}
+              {dbPrograms && dbQuery && (() => {
+                const q = dbQuery.trim().toLowerCase()
+                const matches = dbPrograms.filter(
+                  (p) =>
+                    p.name.toLowerCase().includes(q) ||
+                    (p.client_name ?? '').toLowerCase().includes(q),
+                )
+                if (matches.length === 0) {
+                  return (
+                    <p className="px-2 py-2 text-[10px] text-vault-faint">
+                      No matches for “{dbQuery.trim()}”.
+                    </p>
+                  )
+                }
+                return matches.map((p) => {
                 const id = `db-${p.id}`
                 const loaded = Boolean(drafts[id])
                 const exCount = p.workouts.reduce((n, w) => n + w.exercises.length, 0)
@@ -1262,7 +1307,8 @@ export default function ProgramBuilder({
                     </span>
                   </div>
                 )
-              })}
+              })
+            })()}
             </div>
           </div>
 

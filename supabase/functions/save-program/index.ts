@@ -108,6 +108,143 @@ Deno.serve(async (req: Request) => {
     return json({ programs: result })
   }
 
+  // ---- action: client_detail ---------------------------------------------------
+  // Full client dashboard: profile row + assigned programs (with workouts and
+  // exercises) + recent class bookings matched by email.
+  if (body.action === 'client_detail') {
+    const clientId = String(body.client_id ?? '')
+    if (!clientId) return json({ error: 'client_id required' }, 400)
+    const { data: client, error: clientErr } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', clientId)
+      .single()
+    if (clientErr || !client) return json({ error: clientErr?.message ?? 'client not found' }, 404)
+
+    const { data: programs } = await supabase
+      .from('programs')
+      .select(
+        'id,name,description,duration_weeks,frequency_per_week,status,start_date,end_date,phase_name,sheet_id,sheet_synced_at,updated_at,workouts(id,name,notes,day_of_week,week_number,exercises(name,sets,reps,rest_seconds,order_index,notes))',
+      )
+      .eq('client_id', clientId)
+      .order('updated_at', { ascending: false })
+
+    const email = (client as Record<string, unknown>).email
+      ? String((client as Record<string, unknown>).email).toLowerCase()
+      : null
+    let bookings: unknown[] = []
+    if (email) {
+      const { data: bks } = await supabase
+        .from('bookings')
+        .select('id,class_id,member_name,status,created_at,classes(name,day_of_week,time_label,coach_name)')
+        .eq('member_label', email)
+        .order('created_at', { ascending: false })
+        .limit(10)
+      bookings = (bks ?? []) as unknown[]
+    }
+
+    const shaped = ((programs ?? []) as Record<string, unknown>[]).map((p) => {
+      const workouts = ((p.workouts ?? []) as Record<string, unknown>[])
+        .map((w) => ({
+          ...w,
+          exercises: ((w.exercises ?? []) as Record<string, unknown>[]).sort(
+            (a, b) => Number(a.order_index ?? 0) - Number(b.order_index ?? 0),
+          ),
+        }))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      const { workouts: _w, ...rest } = p
+      return { ...rest, workouts }
+    })
+    return json({ client, programs: shaped, bookings })
+  }
+
+  // ---- action: my_program ------------------------------------------------------
+  // Client-portal view: look the member up by email, return their current
+  // (most recently updated) assigned program plus session completions so the
+  // client can check off workouts week by week.
+  if (body.action === 'my_program') {
+    const email = String(body.email ?? '').trim().toLowerCase()
+    if (!email) return json({ error: 'email required' }, 400)
+    const { data: client, error: clientErr } = await supabase
+      .from('clients')
+      .select('id,full_name,fitness_goal,experience_level,status')
+      .ilike('email', email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (clientErr) return json({ error: clientErr.message }, 500)
+    if (!client) return json({ client: null, program: null, completions: [] })
+
+    const { data: program } = await supabase
+      .from('programs')
+      .select(
+        'id,name,description,duration_weeks,frequency_per_week,status,start_date,phase_name,updated_at,workouts(id,name,notes,day_of_week,week_number,exercises(name,sets,reps,rest_seconds,order_index,notes))',
+      )
+      .eq('client_id', (client as { id: string }).id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const { data: completions } = await supabase
+      .from('client_session_completions')
+      .select('workout_id,week_number,completed_at')
+      .eq('client_id', (client as { id: string }).id)
+
+    let shaped: Record<string, unknown> | null = null
+    if (program) {
+      const p = program as Record<string, unknown>
+      const workouts = ((p.workouts ?? []) as Record<string, unknown>[])
+        .map((w) => ({
+          ...w,
+          exercises: ((w.exercises ?? []) as Record<string, unknown>[]).sort(
+            (a, b) => Number(a.order_index ?? 0) - Number(b.order_index ?? 0),
+          ),
+        }))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      const { workouts: _w, ...rest } = p
+      shaped = { ...rest, workouts }
+    }
+    return json({ client, program: shaped, completions: completions ?? [] })
+  }
+
+  // ---- action: complete_session ------------------------------------------------
+  // Toggle a workout completion for (client by email, workout, week).
+  if (body.action === 'complete_session') {
+    const email = String(body.email ?? '').trim().toLowerCase()
+    const workoutId = String(body.workout_id ?? '')
+    const weekNumber = Math.max(1, Number(body.week_number ?? 1) || 1)
+    const done = Boolean(body.done)
+    if (!email || !workoutId) return json({ error: 'email and workout_id required' }, 400)
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id')
+      .ilike('email', email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!client) return json({ error: 'no client row for this email' }, 404)
+    const clientId = (client as { id: string }).id
+
+    if (done) {
+      const { error } = await supabase
+        .from('client_session_completions')
+        .upsert(
+          { client_id: clientId, workout_id: workoutId, week_number: weekNumber },
+          { onConflict: 'client_id,workout_id,week_number' },
+        )
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true, done: true })
+    }
+    const { error } = await supabase
+      .from('client_session_completions')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('workout_id', workoutId)
+      .eq('week_number', weekNumber)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true, done: false })
+  }
+
   // ---- action: save (default) ------------------------------------------------
   const name = String(body.name ?? '').trim()
   const workouts = Array.isArray(body.workouts) ? (body.workouts as Record<string, unknown>[]) : []

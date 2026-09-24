@@ -13,6 +13,7 @@ import ProgramBuilder from '@/components/coach/ProgramBuilder'
 import MessagingPanel from '@/components/coach/MessagingPanel'
 import RevenueAnalytics from '@/components/coach/RevenueAnalytics'
 import QuickActions from '@/components/coach/QuickActions'
+import SupabaseClients from '@/components/coach/SupabaseClients'
 
 const scrollToId = (id: string) =>
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -160,6 +161,11 @@ export default function Coach() {
           />
         </div>
         <ScheduleRail />
+      </div>
+
+      {/* Section 3.5 — Supabase cloud clients (searchable, full dashboard on click) */}
+      <div id="coach-cloud-clients" className="scroll-mt-24">
+        <SupabaseClients />
       </div>
 
       {/* Section 4 — program builder */}

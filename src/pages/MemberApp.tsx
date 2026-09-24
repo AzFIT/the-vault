@@ -17,6 +17,7 @@ import {
   CalendarDays,
   Check,
   Crown,
+  Dumbbell,
   Home,
   Lock,
   PartyPopper,
@@ -49,10 +50,27 @@ import {
   spotsLeft,
   waitlistCount,
 } from '@/lib/classSchedule'
+import {
+  loadMyProgram,
+  setSessionComplete,
+  type ClientProgramSummary,
+  type MyProgramResult,
+} from '@/lib/programSave'
 
-type Tab = 'home' | 'schedule' | 'activity' | 'profile'
+type Tab = 'home' | 'program' | 'schedule' | 'activity' | 'profile'
 
-const TAB_ICONS = { home: Home, schedule: CalendarDays, activity: ActivityIcon, profile: User } as const
+const TAB_ICONS = { home: Home, program: Dumbbell, schedule: CalendarDays, activity: ActivityIcon, profile: User } as const
+
+/** Notation rides in exercise notes as `{"notation":"A1"}` JSON — same convention as the builder. */
+const notationOf = (notes: string | null): string | null => {
+  if (!notes) return null
+  try {
+    const parsed = JSON.parse(notes) as { notation?: unknown }
+    return typeof parsed.notation === 'string' && parsed.notation ? parsed.notation : null
+  } catch {
+    return null
+  }
+}
 
 /* ---- deterministic demo QR (real dynamic QR ships with the backend) -------- */
 
@@ -203,6 +221,148 @@ function AuthCard({ onAuthed }: { onAuthed: () => void }) {
   )
 }
 
+/* ---- my program view --------------------------------------------------------- */
+
+function MyProgramView({
+  program,
+  completions,
+  week,
+  onWeek,
+  onToggle,
+  toggling,
+}: {
+  program: ClientProgramSummary
+  completions: { workout_id: string; week_number: number; completed_at: string }[]
+  week: number
+  onWeek: (w: number) => void
+  onToggle: (workoutId: string) => void
+  toggling: string | null
+}) {
+  const totalWeeks = Math.max(1, program.duration_weeks ?? 1)
+  const doneThisWeek = program.workouts.filter((w) =>
+    completions.some((c) => c.workout_id === w.id && c.week_number === week),
+  ).length
+  const pct = program.workouts.length ? Math.round((doneThisWeek / program.workouts.length) * 100) : 0
+
+  return (
+    <div className="mt-4 space-y-4">
+      {/* header */}
+      <div className="border border-gold/40 bg-gold/[0.06] p-4">
+        <p className="text-[9px] uppercase tracking-[0.18em] text-vault-gold">Current program</p>
+        <p className="mt-1 text-lg font-bold text-white" style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>
+          {program.name}
+        </p>
+        {program.description && (
+          <p className="mt-1 text-[11px] leading-relaxed text-vault-muted">{program.description}</p>
+        )}
+        <p className="tnum mt-2 text-[10px] uppercase tracking-[0.1em] text-vault-faint">
+          {totalWeeks} weeks · {program.frequency_per_week ?? program.workouts.length}×/week
+          {program.start_date ? ` · started ${new Date(program.start_date).toLocaleDateString()}` : ''}
+        </p>
+      </div>
+
+      {/* week selector */}
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => {
+          const doneCount = program.workouts.filter((wo) =>
+            completions.some((c) => c.workout_id === wo.id && c.week_number === w),
+          ).length
+          const complete = program.workouts.length > 0 && doneCount === program.workouts.length
+          const active = w === week
+          return (
+            <button
+              key={w}
+              type="button"
+              onClick={() => onWeek(w)}
+              className={`tnum relative shrink-0 border px-3 py-2 text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                active
+                  ? 'border-gold bg-gold/15 text-gold'
+                  : complete
+                    ? 'border-emerald-500/40 text-emerald-300'
+                    : 'border-vault-border text-vault-muted hover:text-white'
+              }`}
+            >
+              W{w}
+              {complete && <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* weekly progress */}
+      <div>
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-vault-muted">
+          <span>Week {week} progress</span>
+          <span className="tnum">{doneThisWeek}/{program.workouts.length} sessions</span>
+        </div>
+        <div className="mt-1.5 h-1 w-full bg-vault-surface-2">
+          <div className="h-full bg-gold transition-all duration-300" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      {/* sessions */}
+      {program.workouts.length === 0 ? (
+        <p className="border border-dashed border-vault-border px-4 py-6 text-center text-[12px] text-vault-faint">
+          This program has no sessions yet.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {program.workouts.map((w) => {
+            const done = completions.some((c) => c.workout_id === w.id && c.week_number === week)
+            const busy = toggling === `${w.id}:${week}`
+            return (
+              <div key={w.id} className={`border ${done ? 'border-emerald-500/40' : 'border-vault-border'} bg-vault-surface/50`}>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onToggle(w.id)}
+                    disabled={busy}
+                    aria-label={done ? `Mark ${w.name} not done` : `Mark ${w.name} done`}
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-colors ${
+                      done
+                        ? 'border-emerald-400/60 bg-emerald-400/10 text-emerald-300'
+                        : 'border-vault-border text-vault-faint hover:border-gold/60 hover:text-gold'
+                    } ${busy ? 'opacity-50' : ''}`}
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-[13px] font-bold ${done ? 'text-emerald-200' : 'text-white'}`}>{w.name}</p>
+                    <p className="text-[10px] uppercase tracking-[0.1em] text-vault-faint">
+                      {w.exercises.length} exercises{w.notes ? ` · ${w.notes}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-[9px] uppercase tracking-[0.12em] text-vault-muted">
+                    {done ? 'Done' : 'Tap ✓ when done'}
+                  </span>
+                </div>
+                <div className="border-t border-vault-border/60 px-4 py-2">
+                  {w.exercises.map((e, i) => {
+                    const notation = notationOf(e.notes)
+                    return (
+                      <div key={i} className="flex items-baseline gap-2 py-1 text-[11px]">
+                        <span className="w-7 shrink-0 text-vault-gold">{notation ?? ''}</span>
+                        <span className="min-w-0 flex-1 truncate text-white">{e.name}</span>
+                        <span className="tnum shrink-0 text-vault-muted">
+                          {e.sets != null ? `${e.sets}×` : ''}{e.reps ?? '—'}
+                          {e.rest_seconds != null ? ` · rest ${e.rest_seconds}s` : ''}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <p className="text-[10px] leading-relaxed text-vault-faint">
+        Ticking a session records it against Week {week} — your trainer sees your progress in the coach portal.
+      </p>
+    </div>
+  )
+}
+
 /* ---- main page ------------------------------------------------------------- */
 
 export default function MemberApp() {
@@ -255,6 +415,60 @@ export default function MemberApp() {
       /* surfaced by the button simply re-enabling — the desk can also sign */
     } finally {
       setSigningWaiver(false)
+    }
+  }
+
+  /* ---- my program (assigned by the trainer, from Supabase) ----------------- */
+  const [myProg, setMyProg] = useState<MyProgramResult | null>(null)
+  const [myProgState, setMyProgState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [progWeek, setProgWeek] = useState(1)
+  const [toggling, setToggling] = useState<string | null>(null)
+  useEffect(() => {
+    if (!account) return
+    let live = true
+    setMyProgState('loading')
+    loadMyProgram(account.email)
+      .then((r) => {
+        if (!live) return
+        setMyProg(r)
+        setMyProgState('ready')
+        // Land on the current week of the program when it has a start date.
+        if (r.program?.start_date && r.program.duration_weeks) {
+          const days = Math.floor(
+            (Date.now() - new Date(r.program.start_date).getTime()) / 86_400_000,
+          )
+          setProgWeek(Math.min(Math.max(1, Math.floor(days / 7) + 1), r.program.duration_weeks))
+        }
+      })
+      .catch(() => {
+        if (live) setMyProgState('error')
+      })
+    return () => {
+      live = false
+    }
+  }, [account])
+  const toggleSession = async (workoutId: string) => {
+    if (!account || toggling) return
+    const key = `${workoutId}:${progWeek}`
+    const done = !myProg?.completions.some(
+      (c) => c.workout_id === workoutId && c.week_number === progWeek,
+    )
+    setToggling(key)
+    try {
+      await setSessionComplete(account.email, workoutId, progWeek, done)
+      setMyProg((prev) => {
+        if (!prev) return prev
+        const completions = done
+          ? [...prev.completions, { workout_id: workoutId, week_number: progWeek, completed_at: new Date().toISOString() }]
+          : prev.completions.filter(
+              (c) => !(c.workout_id === workoutId && c.week_number === progWeek),
+            )
+        return { ...prev, completions }
+      })
+    } catch {
+      /* leave unchecked — the button re-enables */
+    } finally {
+      setToggling(null)
     }
   }
 
@@ -440,6 +654,47 @@ export default function MemberApp() {
               <p className="mt-3 text-[11px] text-vault-faint">
                 Attendance history (attended / no-show) populates once check-in scanning goes live.
               </p>
+            </div>
+          )}
+
+          {/* ————— MY PROGRAM ————— */}
+          {tab === 'program' && (
+            <div>
+              <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>My Program</h2>
+
+              {myProgState === 'loading' && (
+                <p className="mt-4 border border-vault-border bg-vault-surface/50 px-4 py-6 text-center text-[12px] text-vault-muted">
+                  Loading your program…
+                </p>
+              )}
+              {myProgState === 'error' && (
+                <p className="mt-4 border border-red-500/40 bg-red-500/10 px-4 py-6 text-center text-[12px] text-red-300">
+                  Couldn't load your program — pull down to retry in a moment.
+                </p>
+              )}
+              {myProgState === 'ready' && !myProg?.client && (
+                <p className="mt-4 border border-vault-border bg-vault-surface/50 px-4 py-6 text-center text-[12px] leading-relaxed text-vault-muted">
+                  Your member account isn't linked to a client profile yet — ask your
+                  trainer or the front desk to link <span className="text-white">{account.email}</span> to your client record.
+                </p>
+              )}
+              {myProgState === 'ready' && myProg?.client && !myProg.program && (
+                <p className="mt-4 border border-vault-border bg-vault-surface/50 px-4 py-6 text-center text-[12px] text-vault-muted">
+                  {myProg.client.full_name} — your trainer hasn't assigned a program yet.
+                  It will appear here the moment it's sent.
+                </p>
+              )}
+
+              {myProg?.client && myProg.program && (
+                <MyProgramView
+                  program={myProg.program}
+                  completions={myProg.completions}
+                  week={progWeek}
+                  onWeek={setProgWeek}
+                  onToggle={toggleSession}
+                  toggling={toggling}
+                />
+              )}
             </div>
           )}
 
