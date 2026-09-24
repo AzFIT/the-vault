@@ -6,6 +6,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 //   list_members    { query? }              → search member_profiles (name/phone), with subscription
 //   member_detail   { user_id }             → profile + auth email + subscription + recent credit ledger
 //   credit_activity {}                      → latest ledger rows across ALL members (renewals + adjustments)
+//   frontdesk_profile { user_id }           → check-in card: payment state, waiver, recent bookings, birthday flag
+//   sign_waiver     { user_id }             → mark the liability waiver signed (front desk)
+//   set_birthday    { user_id, date_of_birth } → set/correct a member's birthday (YYYY-MM-DD)
 //   renew           { user_id }             → roll period forward, reset credits
 //   change_plan     { user_id, plan_code }  → swap plan, reset allowance
 //   adjust_credits  { user_id, delta, reason } → manual adjustment, clamped at 0
@@ -113,6 +116,117 @@ Deno.serve(async (req: Request) => {
     }
 
     const userId = String(body.user_id ?? '').trim()
+
+    if (action === 'frontdesk_profile') {
+      if (!userId) return json({ error: 'user_id required' }, 400)
+      const [{ data: profile, error: pErr }, { data: authData }, { data: sub }] = await Promise.all([
+        supabase.from('member_profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.auth.admin.getUserById(userId),
+        supabase.from('user_subscriptions').select('*').eq('user_id', userId).maybeSingle(),
+      ])
+      if (pErr) return json({ error: pErr.message }, 400)
+      if (!profile) return json({ error: 'Member not found.' }, 404)
+
+      // Bookings link either by auth user_id or by the local profile slug
+      // ('prof-rachel-cheung'). Match both so every member's history shows.
+      const slug =
+        'prof-' +
+        `${profile.first_name ?? ''}-${profile.last_name ?? ''}`
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')
+      const { data: bookings } = await supabase
+        .from('bookings')
+        .select('id,class_id,status,created_at')
+        .or(`member_label.eq.${userId},member_label.eq.${slug}`)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      const classIds = [...new Set((bookings ?? []).map((b: Record<string, unknown>) => b.class_id))]
+      const { data: classes } = classIds.length
+        ? await supabase.from('classes').select('id,name,day_of_week,time_label,coach_name').in('id', classIds)
+        : { data: [] }
+      const classById = new Map<string, Record<string, unknown>>(
+        (classes ?? []).map((c: Record<string, unknown>) => [String(c.id), c]),
+      )
+
+      // Birthday is judged in Hong Kong time — that's where the front desk is.
+      const hkParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Hong_Kong',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(new Date())
+      const hkMonth = Number(hkParts.find((p) => p.type === 'month')?.value)
+      const hkDay = Number(hkParts.find((p) => p.type === 'day')?.value)
+      const dob = profile.date_of_birth ? new Date(`${profile.date_of_birth}T00:00:00Z`) : null
+      const birthdayToday = dob ? dob.getUTCMonth() + 1 === hkMonth && dob.getUTCDate() === hkDay : false
+
+      const periodEnd = sub?.current_period_end ? new Date(sub.current_period_end) : null
+      const paymentState = !sub
+        ? 'none'
+        : sub.status === 'canceled'
+          ? 'canceled'
+          : periodEnd && periodEnd > new Date()
+            ? 'up_to_date'
+            : 'past_due'
+
+      return json({
+        profile,
+        email: authData?.user?.email ?? null,
+        subscription: sub,
+        payment: {
+          state: paymentState,
+          plan_name: sub?.membership_name ?? null,
+          status: sub?.status ?? null,
+          credits_remaining: sub?.credits_remaining ?? null,
+          current_period_end: sub?.current_period_end ?? null,
+        },
+        waiver_signed_at: profile.waiver_signed_at ?? null,
+        birthday_today: birthdayToday,
+        bookings: (bookings ?? []).map((b: Record<string, unknown>) => {
+          const cls = classById.get(String(b.class_id)) ?? {}
+          return {
+            id: b.id,
+            status: b.status,
+            created_at: b.created_at,
+            class_name: cls.name ?? 'Class',
+            day_of_week: cls.day_of_week ?? null,
+            time_label: cls.time_label ?? null,
+            coach_name: cls.coach_name ?? null,
+          }
+        }),
+      })
+    }
+
+    if (action === 'sign_waiver') {
+      if (!userId) return json({ error: 'user_id required' }, 400)
+      const { data, error } = await supabase
+        .from('member_profiles')
+        .update({ waiver_signed_at: new Date().toISOString() })
+        .eq('id', userId)
+        .select('waiver_signed_at')
+        .maybeSingle()
+      if (error) return json({ error: error.message }, 400)
+      if (!data) return json({ error: 'Member not found.' }, 404)
+      return json({ signed: true, waiver_signed_at: data.waiver_signed_at })
+    }
+
+    if (action === 'set_birthday') {
+      if (!userId) return json({ error: 'user_id required' }, 400)
+      const dob = String(body.date_of_birth ?? '').trim()
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+        return json({ error: 'date_of_birth must be YYYY-MM-DD' }, 400)
+      }
+      const { data, error } = await supabase
+        .from('member_profiles')
+        .update({ date_of_birth: dob })
+        .eq('id', userId)
+        .select('date_of_birth')
+        .maybeSingle()
+      if (error) return json({ error: error.message }, 400)
+      if (!data) return json({ error: 'Member not found.' }, 404)
+      return json({ set: true, date_of_birth: data.date_of_birth })
+    }
+
     if (action === 'member_detail') {
       if (!userId) return json({ error: 'user_id required' }, 400)
       const [{ data: profile, error: pErr }, { data: authData }, { data: sub }, { data: ledger }] =
@@ -159,7 +273,7 @@ Deno.serve(async (req: Request) => {
       if (error) return json({ error: mapError(error.message) }, 400)
       return json({ adjusted: true, credits_remaining: data })
     }
-    return json({ error: `unknown action: ${action || '(none)'} — use list_members | member_detail | credit_activity | renew | change_plan | adjust_credits` }, 400)
+    return json({ error: `unknown action: ${action || '(none)'} — use list_members | member_detail | credit_activity | frontdesk_profile | sign_waiver | set_birthday | renew | change_plan | adjust_credits` }, 400)
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500)
   }

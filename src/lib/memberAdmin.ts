@@ -74,6 +74,47 @@ export async function listCreditActivity(): Promise<CreditActivityRow[]> {
   return data.activity
 }
 
+export interface FrontdeskBooking {
+  id: string
+  status: string
+  created_at: string
+  class_name: string
+  day_of_week: string | null
+  time_label: string | null
+  coach_name: string | null
+}
+
+export interface FrontdeskProfile {
+  profile: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    phone: string | null
+    date_of_birth: string | null
+    waiver_signed_at: string | null
+    created_at: string
+  }
+  email: string | null
+  payment: {
+    state: 'up_to_date' | 'past_due' | 'canceled' | 'none'
+    plan_name: string | null
+    status: string | null
+    credits_remaining: number | null
+    current_period_end: string | null
+  }
+  birthday_today: boolean
+  bookings: FrontdeskBooking[]
+}
+
+export async function getFrontdeskProfile(userId: string): Promise<FrontdeskProfile> {
+  return invoke<FrontdeskProfile>({ action: 'frontdesk_profile', user_id: userId })
+}
+
+export async function signMemberWaiver(userId: string): Promise<string> {
+  const data = await invoke<{ waiver_signed_at: string }>({ action: 'sign_waiver', user_id: userId })
+  return data.waiver_signed_at
+}
+
 export async function listMembers(query?: string): Promise<MemberListRow[]> {
   const data = await invoke<{ members: MemberListRow[] }>({
     action: 'list_members',

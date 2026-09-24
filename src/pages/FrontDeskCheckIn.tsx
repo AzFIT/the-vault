@@ -6,12 +6,14 @@
  * handled with a name + pass type, and today's check-in list shows who has
  * already come through the door.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Check, Search, UserPlus } from 'lucide-react'
 import { GridAvatar } from '@/components/coach/shared'
+import MemberProfileModal from '@/components/MemberProfileModal'
 import { STATUS_LABELS, listClients } from '@/lib/clientDirectory'
 import type { ClientRow } from '@/lib/clientDirectory'
+import { listMembers, type MemberListRow } from '@/lib/memberAdmin'
 import { getCurrentProfile, listTodayEvents, recordEvent } from '@/lib/staff'
 
 const STATUS_PILL: Record<ClientRow['status'], string> = {
@@ -29,9 +31,27 @@ export default function FrontDeskCheckIn() {
   const [walkName, setWalkName] = useState('')
   const [pass, setPass] = useState(PASSES[0])
   const [tick, setTick] = useState(0)
+  const [cloudMembers, setCloudMembers] = useState<MemberListRow[]>([])
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
 
   const clients = useMemo(() => listClients(), [])
   const refresh = () => setTick((t) => t + 1)
+
+  // Cloud member lookup — powers the check-in profile card. Debounced so we
+  // don't hit the edge function on every keystroke.
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setCloudMembers([])
+      return
+    }
+    const t = window.setTimeout(() => {
+      listMembers(q)
+        .then(setCloudMembers)
+        .catch(() => setCloudMembers([]))
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [query])
 
   const todaysCheckins = useMemo(
     () =>
@@ -59,10 +79,21 @@ export default function FrontDeskCheckIn() {
       .slice(0, 8)
   }, [clients, query])
 
-  const checkIn = (c: ClientRow) => {
-    if (!profile || isCheckedIn(c)) return
-    recordEvent(profile.id, 'checkin', `Check-in — ${c.name} (${c.subtitle.split('·')[0].trim()})`)
+  // Cloud members whose names aren't already in the local directory results
+  const extraCloud = useMemo(() => {
+    const localNames = new Set(results.map((c) => c.name.toLowerCase()))
+    return cloudMembers.filter((m) => !localNames.has(`${m.first_name ?? ''} ${m.last_name ?? ''}`.trim().toLowerCase()))
+  }, [cloudMembers, results])
+
+  const logCheckIn = (label: string) => {
+    if (!profile) return
+    recordEvent(profile.id, 'checkin', label)
     refresh()
+  }
+
+  const checkIn = (c: ClientRow) => {
+    if (isCheckedIn(c)) return
+    logCheckIn(`Check-in — ${c.name} (${c.subtitle.split('·')[0].trim()})`)
   }
 
   const addWalkIn = (e: FormEvent) => {
@@ -139,10 +170,42 @@ export default function FrontDeskCheckIn() {
                   </li>
                 )
               })}
-              {query.trim() && results.length === 0 && (
+              {query.trim() && results.length === 0 && extraCloud.length === 0 && (
                 <li className="py-6 text-center text-[13px] text-vault-faint">
                   No member matches “{query.trim()}”.
                 </li>
+              )}
+              {extraCloud.length > 0 && (
+                <>
+                  <li className="pt-3 text-[9px] uppercase tracking-[0.2em] text-vault-faint">Cloud member accounts</li>
+                  {extraCloud.map((m) => {
+                    const fullName = `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || '(unnamed)'
+                    return (
+                      <li
+                        key={m.id}
+                        className="flex flex-wrap items-center gap-3 border-b border-vault-border/60 py-3 text-[13px] last:border-0"
+                      >
+                        <GridAvatar name={fullName} size={32} />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-white">{fullName}</p>
+                          <p className="max-w-[300px] truncate text-[11px] text-vault-faint">
+                            {m.membership_name ?? 'No plan'} · {m.credits_remaining ?? '—'} credits
+                          </p>
+                        </div>
+                        <span className={`border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] ${STATUS_PILL[m.status === 'active' ? 'member' : 'frozen']}`}>
+                          {m.status ?? '—'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setProfileUserId(m.id)}
+                          className="bg-gold px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-black transition-colors hover:bg-gold-2"
+                        >
+                          Check in
+                        </button>
+                      </li>
+                    )
+                  })}
+                </>
               )}
               {!query.trim() && (
                 <li className="py-4 text-[12px] text-vault-faint">
@@ -218,6 +281,16 @@ export default function FrontDeskCheckIn() {
           </ul>
         </section>
       </div>
+
+      {/* Check-in profile card — payment status, waiver, bookings, birthday */}
+      {profileUserId && profile && (
+        <MemberProfileModal
+          userId={profileUserId}
+          staffName={profile.staffNo}
+          onCheckIn={logCheckIn}
+          onClose={() => setProfileUserId(null)}
+        />
+      )}
     </div>
   )
 }
