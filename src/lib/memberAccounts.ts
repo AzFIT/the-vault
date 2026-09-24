@@ -2,10 +2,13 @@
  * Member accounts — backed by REAL Supabase Auth.
  *
  * - Signup goes through the `member-auth` Edge Function, which creates the
- *   auth user (pre-confirmed — the project has no SMTP) plus a
- *   `member_profiles` row holding display fields and the QR secret.
+ *   auth user (pre-confirmed — the project has no SMTP), a
+ *   `member_profiles` row (display fields + QR secret), and a starter
+ *   `user_subscriptions` row (plan + class credits).
  * - Sign-in / sign-out are plain `supabase.auth` calls with the publishable
  *   key: credentials never touch our code and sessions are real JWTs.
+ * - Subscriptions are read live from `user_subscriptions` through RLS
+ *   ("read own subscription"), via `useSubscription` below.
  * - `getCurrentAccount()` is synchronous for first paint; it reads a small
  *   cache that `onAuthStateChange` keeps in sync with the actual session.
  *
@@ -14,6 +17,7 @@
  * profile shape are unchanged, so the rest of the app needed no reshaping.
  */
 
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export interface MemberAccount {
@@ -28,7 +32,7 @@ export interface MemberAccount {
   createdAt: string
 }
 
-/** Mirrors `user_subscriptions` — still a stub until that table ships. */
+/** Mirrors `user_subscriptions` — a real table, read live via RLS. */
 export interface AccountSubscription {
   membershipName: string
   status: 'active' | 'past_due' | 'canceled' | 'frozen'
@@ -217,14 +221,41 @@ export function signOutAccount() {
   void supabase.auth.signOut()
 }
 
-/** STUB until the `user_subscriptions` table ships — clearly labeled mock. */
-export function getSubscription(_account: MemberAccount): AccountSubscription {
-  const end = new Date()
-  end.setMonth(end.getMonth() + 1)
+/* ---- subscription (real `user_subscriptions` table, read via RLS) ---------- */
+
+async function fetchSubscription(account: MemberAccount): Promise<AccountSubscription | null> {
+  const { data, error } = await supabase
+    .from('user_subscriptions')
+    .select('membership_name,status,current_period_end,credits_remaining')
+    .eq('user_id', account.id)
+    .maybeSingle()
+  if (error || !data) return null
+  const row = data as Record<string, unknown>
   return {
-    membershipName: 'Gym + Group Classes',
-    status: 'active',
-    currentPeriodEnd: end.toISOString(),
-    creditsRemaining: 8,
+    membershipName: String(row.membership_name),
+    status: String(row.status) as AccountSubscription['status'],
+    currentPeriodEnd: String(row.current_period_end),
+    creditsRemaining: Number(row.credits_remaining),
   }
+}
+
+/**
+ * Live subscription for the signed-in member. Returns `null` while the first
+ * fetch is in flight (render a placeholder, not a fake plan) and re-fetches
+ * whenever the account or the auth session changes.
+ */
+export function useSubscription(account: MemberAccount | null): AccountSubscription | null {
+  const [subscription, setSubscription] = useState<AccountSubscription | null>(null)
+  useEffect(() => {
+    let alive = true
+    setSubscription(null)
+    if (!account) return
+    void fetchSubscription(account).then((s) => {
+      if (alive) setSubscription(s)
+    })
+    return () => {
+      alive = false
+    }
+  }, [account])
+  return subscription
 }

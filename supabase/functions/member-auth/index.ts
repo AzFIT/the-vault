@@ -96,10 +96,14 @@ async function handle(req: Request): Promise<Response> {
     role: 'member',
     qr_code_secret: qr,
   })
-  if (profileError) {
-    // Roll the auth user back so a failed profile doesn't leave an orphan.
+  const { error: subError } = await supabase.from('user_subscriptions').insert({
+    user_id: data.user.id,
+  })
+  if (profileError || subError) {
+    // Roll the auth user back so a failed profile/subscription doesn't leave
+    // an orphan (member_profiles and user_subscriptions cascade from it).
     await supabase.auth.admin.deleteUser(data.user.id)
-    return json({ error: `profile failed: ${profileError.message}` }, 400)
+    return json({ error: `profile failed: ${(profileError ?? subError)?.message}` }, 400)
   }
 
   return json({

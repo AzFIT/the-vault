@@ -5,9 +5,9 @@
  * booked class right under it, and 1-click booking on the schedule.
  *
  * Auth: real Supabase Auth — signup goes through the member-auth Edge
- * Function (auth user + member_profiles row), sign-in is a plain
- * supabase.auth call, and bookings are recorded under the auth user id.
- * Only the subscription is still a labeled stub until that table ships.
+ * Function (auth user + member_profiles + starter user_subscriptions),
+ * sign-in is a plain supabase.auth call, bookings are recorded under the
+ * auth user id, and the membership card reads the live subscription row.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -27,9 +27,9 @@ import { requestVaultEntry } from '@/lib/vaultEntry'
 import {
   createAccount,
   getCurrentAccount,
-  getSubscription,
   signInAccount,
   signOutAccount,
+  useSubscription,
   type MemberAccount,
 } from '@/lib/memberAccounts'
 import {
@@ -199,6 +199,8 @@ function AuthCard({ onAuthed }: { onAuthed: () => void }) {
 
 export default function MemberApp() {
   const [account, setAccount] = useState<MemberAccount | null>(() => getCurrentAccount())
+  // Live from `user_subscriptions` — null while the first fetch is in flight.
+  const subscription = useSubscription(account)
   const [tab, setTab] = useState<Tab>('home')
   const [bookTick, setBookTick] = useState(0)
   useEffect(() => {
@@ -238,7 +240,6 @@ export default function MemberApp() {
     )
   }
 
-  const subscription = getSubscription(account)
   const bookings = WEEK_CLASSES.filter((c) => bookingFor(c.id))
   const nextClass = bookings.find((c) => bookingFor(c.id)?.status === 'confirmed')
   const lockOut = () => {
@@ -295,13 +296,19 @@ export default function MemberApp() {
                 </p>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[15px] font-bold text-white">{subscription.membershipName}</p>
+                    <p className="text-[15px] font-bold text-white">{subscription?.membershipName ?? 'Loading plan…'}</p>
                     <p className="text-[12px] text-vault-muted">
-                      Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString()} · {subscription.creditsRemaining} class credits left
+                      {subscription
+                        ? `Renews ${new Date(subscription.currentPeriodEnd).toLocaleDateString()} · ${subscription.creditsRemaining} class credits left`
+                        : 'Fetching your membership from the Vault…'}
                     </p>
                   </div>
-                  <span className="border border-emerald-400/50 px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-emerald-300">
-                    {subscription.status}
+                  <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.1em] ${
+                    subscription?.status === 'active'
+                      ? 'border-emerald-400/50 text-emerald-300'
+                      : 'border-gold/50 text-gold'
+                  }`}>
+                    {subscription?.status ?? '…'}
                   </span>
                 </div>
               </div>
@@ -394,7 +401,7 @@ export default function MemberApp() {
                   </span>
                   <div>
                     <p className="text-[16px] font-bold text-white">{account.firstName} {account.lastName}</p>
-                    <p className="text-[12px] text-vault-muted">{subscription.membershipName}</p>
+                    <p className="text-[12px] text-vault-muted">{subscription?.membershipName ?? '—'}</p>
                   </div>
                 </div>
                 <dl className="mt-5 space-y-2.5 text-[12px]">
