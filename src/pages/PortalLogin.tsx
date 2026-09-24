@@ -169,10 +169,15 @@ export default function PortalLogin() {
                   value={login}
                   autoComplete="username"
                   onChange={(e) => {
-                    setLogin(e.target.value)
+                    const v = e.target.value
+                    setLogin(v)
                     setError(null)
+                    // partial text keeps/reopens the helper list; a complete
+                    // known account dismisses it (the list has served its purpose)
+                    setSuggestOpen(!findAccount(v))
                   }}
                   onFocus={() => setSuggestOpen(true)}
+                  onBlur={() => window.setTimeout(() => setSuggestOpen(false), 120)}
                   onKeyDown={(e) => e.key === 'Enter' && armCard() && enterCard()}
                 />
                 {/* Tester suggestions — tap one to fill email + password.
@@ -222,6 +227,7 @@ export default function PortalLogin() {
                     setPassword(e.target.value)
                     setError(null)
                   }}
+                  onFocus={() => setSuggestOpen(false)}
                   onKeyDown={(e) => e.key === 'Enter' && armCard() && enterCard()}
                 />
               </div>
