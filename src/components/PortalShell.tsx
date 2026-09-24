@@ -40,6 +40,7 @@ const PAGE_CHROME: Record<string, { eyebrow: string; title: string }> = {
   '/portal/ops/pos': { eyebrow: 'Grow', title: 'Point of sale' },
   '/portal/ops/enquiries': { eyebrow: 'Grow', title: 'Enquiries inbox' },
   '/portal/rooms': { eyebrow: 'Operate', title: 'Rooms' },
+  '/portal/members': { eyebrow: 'Manage', title: 'Members' },
 }
 
 const NAV_OPERATE: PortalNavItem[] = [
@@ -58,6 +59,7 @@ const NAV_GROW: PortalNavItem[] = [
 const NAV_MANAGE: PortalNavItem[] = [
   { label: 'Services & Products', to: '/portal/services' },
   { label: 'Staff', to: '/portal/staff' },
+  { label: 'Members', to: '/portal/members' },
   { label: 'Settings', to: '/portal/settings' },
 ]
 
