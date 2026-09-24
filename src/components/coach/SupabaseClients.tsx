@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  Activity as ActivityIcon,
   CalendarDays,
+  CheckCircle2,
   Dumbbell,
   Loader2,
   Mail,
@@ -148,6 +150,9 @@ function DashboardDrawer({
                     </div>
                   )}
 
+                  {/* training activity — member check-ins */}
+                  <ActivitySection result={result} />
+
                   {/* programs */}
                   <section>
                     <p className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-vault-muted">
@@ -215,8 +220,119 @@ function DashboardDrawer({
   )
 }
 
-function ProgramCard({ program: p }: { program: ClientProgramSummary }) {
-  const [open, setOpen] = useState(false)
+/* ---- training activity (member check-ins) ----------------------------------- */
+
+function ActivitySection({ result }: { result: ClientDetailResult }) {
+  const { completions, programs } = result
+  // The current program is the most recently updated one with sessions.
+  const program = programs.find((p) => p.workouts.length > 0) ?? null
+
+  const stats = (() => {
+    if (!program) return null
+    const ids = new Set(program.workouts.map((w) => w.id))
+    const total = program.workouts.length
+    const perWeek = new Map<number, number>()
+    let latest: string | null = null
+    for (const c of completions) {
+      if (!ids.has(c.workout_id)) continue
+      perWeek.set(c.week_number, (perWeek.get(c.week_number) ?? 0) + 1)
+      if (!latest || c.completed_at > latest) latest = c.completed_at
+    }
+    // Streak: consecutive weeks (ending at the most recent completed week)
+    // with at least one session checked in.
+    const weeksDone = [...perWeek.keys()].sort((a, b) => a - b)
+    let streak = 0
+    if (weeksDone.length) {
+      streak = 1
+      for (let w = weeksDone[weeksDone.length - 1] - 1; w >= 1; w--) {
+        if (perWeek.has(w) && (perWeek.get(w) ?? 0) > 0) streak++
+        else break
+      }
+    }
+    const totalDone = [...perWeek.values()].reduce((a, b) => a + b, 0)
+    return { ids, total, perWeek, latest, streak, totalDone, weeks: Math.max(1, program.duration_weeks ?? 1) }
+  })()
+
+  const workoutName = (id: string) =>
+    program?.workouts.find((w) => w.id === id)?.name ?? 'Session'
+
+  const recent = completions
+    .filter((c) => stats?.ids.has(c.workout_id))
+    .slice(0, 6)
+
+  return (
+    <section>
+      <p className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+        <ActivityIcon className="h-3.5 w-3.5 text-vault-gold" />
+        Training activity
+      </p>
+      {!stats || stats.totalDone === 0 ? (
+        <p className="border border-dashed border-vault-border px-3 py-3 text-[11px] text-vault-faint">
+          No sessions checked in yet{program ? ` on “${program.name}”` : ' — the client sees a ✓ button on each session in the member app'}.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-px border border-vault-border bg-vault-border">
+            <div className="bg-vault-bg px-3 py-2.5 text-center">
+              <p className="tnum text-lg font-bold text-white">{stats.totalDone}</p>
+              <p className="text-[8px] uppercase tracking-[0.14em] text-vault-faint">Sessions done</p>
+            </div>
+            <div className="bg-vault-bg px-3 py-2.5 text-center">
+              <p className="tnum text-lg font-bold text-vault-gold">{stats.streak}</p>
+              <p className="text-[8px] uppercase tracking-[0.14em] text-vault-faint">Week streak</p>
+            </div>
+            <div className="bg-vault-bg px-3 py-2.5 text-center">
+              <p className="tnum text-lg font-bold text-white">
+                {stats.latest ? new Date(stats.latest).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '—'}
+              </p>
+              <p className="text-[8px] uppercase tracking-[0.14em] text-vault-faint">Last check-in</p>
+            </div>
+          </div>
+
+          {/* per-week grid for the current program */}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {Array.from({ length: stats.weeks }, (_, i) => i + 1).map((w) => {
+              const done = stats.perWeek.get(w) ?? 0
+              const full = done >= stats.total && stats.total > 0
+              const part = done > 0 && !full
+              return (
+                <span
+                  key={w}
+                  title={`Week ${w}: ${done}/${stats.total} sessions`}
+                  className={`tnum border px-2 py-1 text-[9px] uppercase tracking-[0.08em] ${
+                    full
+                      ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                      : part
+                        ? 'border-gold/50 bg-gold/10 text-vault-gold'
+                        : 'border-vault-border text-vault-faint'
+                  }`}
+                >
+                  W{w} {done}/{stats.total}
+                </span>
+              )
+            })}
+          </div>
+
+          {recent.length > 0 && (
+            <div className="mt-2 divide-y divide-vault-border border border-vault-border">
+              {recent.map((c, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                  <p className="min-w-0 flex-1 truncate text-[11px] text-white">{workoutName(c.workout_id)}</p>
+                  <p className="tnum shrink-0 text-[10px] text-vault-faint">
+                    W{c.week_number} · {new Date(c.completed_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+function ProgramCard({ program: p }: { program: ClientProgramSummary }) {  const [open, setOpen] = useState(false)
   const exCount = p.workouts.reduce((n, w) => n + w.exercises.length, 0)
   return (
     <div className="border border-vault-border">

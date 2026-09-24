@@ -143,6 +143,12 @@ Deno.serve(async (req: Request) => {
       bookings = (bks ?? []) as unknown[]
     }
 
+    const { data: completions } = await supabase
+      .from('client_session_completions')
+      .select('workout_id,week_number,completed_at')
+      .eq('client_id', clientId)
+      .order('completed_at', { ascending: false })
+
     const shaped = ((programs ?? []) as Record<string, unknown>[]).map((p) => {
       const workouts = ((p.workouts ?? []) as Record<string, unknown>[])
         .map((w) => ({
@@ -155,7 +161,7 @@ Deno.serve(async (req: Request) => {
       const { workouts: _w, ...rest } = p
       return { ...rest, workouts }
     })
-    return json({ client, programs: shaped, bookings })
+    return json({ client, programs: shaped, bookings, completions: completions ?? [] })
   }
 
   // ---- action: my_program ------------------------------------------------------

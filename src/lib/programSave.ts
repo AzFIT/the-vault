@@ -155,6 +155,7 @@ export interface ClientDetailResult {
   client: ClientDetail
   programs: ClientProgramSummary[]
   bookings: ClientBooking[]
+  completions: { workout_id: string; week_number: number; completed_at: string }[]
 }
 
 export async function loadClientDetail(clientId: string): Promise<ClientDetailResult> {
