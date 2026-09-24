@@ -215,6 +215,43 @@ export async function updateClientFlag(
   }
 }
 
+/* ---- front-desk identity verification ---------------------------------------- */
+
+export interface FrontdeskVerifyClient {
+  id: string
+  full_name: string
+  photo_url: string | null
+}
+
+export interface FrontdeskOpenFlag {
+  id: string
+  reason: string
+  status: string
+  flagged_by: string
+  created_at: string
+}
+
+export interface FrontdeskVerifyResult {
+  client: FrontdeskVerifyClient | null
+  open_flags: FrontdeskOpenFlag[]
+}
+
+/**
+ * Check-in identity lookup: find the client row for a member's email and
+ * return their photo plus any OPEN fraud flags so staff can verify identity
+ * on the spot. A null client simply means "no client row on file".
+ */
+export async function frontdeskVerify(email: string): Promise<FrontdeskVerifyResult> {
+  const { data, error } = await supabase.functions.invoke('save-program', {
+    body: { action: 'frontdesk_verify', email, secret: BUILDER_SECRET },
+  })
+  if (error) throw new Error(error.message)
+  if (data && typeof data === 'object' && 'error' in data) {
+    throw new Error(String((data as { error: unknown }).error))
+  }
+  return data as FrontdeskVerifyResult
+}
+
 export async function loadClientDetail(clientId: string): Promise<ClientDetailResult> {
   const { data, error } = await supabase.functions.invoke('save-program', {
     body: { action: 'client_detail', client_id: clientId, secret: BUILDER_SECRET },

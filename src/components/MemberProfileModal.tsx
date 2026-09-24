@@ -14,6 +14,7 @@ import {
   FileWarning,
   Plus,
   RefreshCcw,
+  ShieldAlert,
   X,
 } from 'lucide-react'
 import {
@@ -23,6 +24,11 @@ import {
   signMemberWaiver,
   type FrontdeskProfile,
 } from '@/lib/memberAdmin'
+import {
+  flagClient,
+  frontdeskVerify,
+  type FrontdeskVerifyResult,
+} from '@/lib/programSave'
 
 const PAYMENT_STYLES: Record<string, { pill: string; label: string }> = {
   up_to_date: { pill: 'border-emerald-400/50 text-emerald-300', label: 'Payments up to date' },
@@ -40,13 +46,26 @@ interface Props {
 
 export default function MemberProfileModal({ userId, staffName, onCheckIn, onClose }: Props) {
   const [data, setData] = useState<FrontdeskProfile | null>(null)
+  const [verify, setVerify] = useState<FrontdeskVerifyResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
+  // Identity verification is auxiliary — a failure here must never block the
+  // check-in flow, so it fails silently to "no data on file".
+  const loadVerify = async (email: string) => {
+    try {
+      setVerify(await frontdeskVerify(email))
+    } catch {
+      setVerify(null)
+    }
+  }
+
   const reload = async () => {
     try {
-      setData(await getFrontdeskProfile(userId))
+      const profile = await getFrontdeskProfile(userId)
+      setData(profile)
+      if (profile.email) void loadVerify(profile.email)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load member.')
     }
@@ -93,12 +112,55 @@ export default function MemberProfileModal({ userId, staffName, onCheckIn, onClo
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-vault-border p-5">
-          <div>
-            <p className="text-[16px] font-bold text-white">{name}</p>
-            <p className="text-[12px] text-vault-muted">
-              {data?.email ?? 'loading…'}
-              {data?.profile.phone ? ` · ${data.profile.phone}` : ''}
-            </p>
+          <div className="flex items-start gap-3">
+            {/* Identity photo — gold ring normally, red ring when fraud flags are open */}
+            <div
+              className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 ${
+                verify && verify.open_flags.length > 0 ? 'border-red-400/70' : 'border-gold/60'
+              }`}
+            >
+              {verify?.client?.photo_url ? (
+                <img
+                  src={verify.client.photo_url}
+                  alt={`${name} — ID photo`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-vault-border/40 text-[15px] font-bold text-gold">
+                  {name === '…'
+                    ? '?'
+                    : name
+                        .split(' ')
+                        .map((w) => w[0] ?? '')
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-[16px] font-bold text-white">{name}</p>
+              <p className="text-[12px] text-vault-muted">
+                {data?.email ?? 'loading…'}
+                {data?.profile.phone ? ` · ${data.profile.phone}` : ''}
+              </p>
+              {/* Discreet fraud report — one tap, no confrontation, management reviews later */}
+              <button
+                type="button"
+                disabled={busy || !verify?.client}
+                onClick={() => {
+                  const clientId = verify?.client?.id
+                  if (!clientId) return
+                  void run(
+                    () => flagClient(clientId, 'Front desk: person did not match photo at check-in', staffName),
+                    'Flagged discreetly — management will review.',
+                  )
+                }}
+                className="mt-1.5 flex items-center gap-1 text-[10px] uppercase tracking-[0.12em] text-vault-faint transition-colors hover:text-red-300 disabled:opacity-40"
+              >
+                <ShieldAlert className="h-3 w-3" /> Report identity mismatch
+              </button>
+            </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="p-1 text-vault-muted transition-colors hover:text-white">
             <X className="h-4 w-4" />
@@ -108,6 +170,23 @@ export default function MemberProfileModal({ userId, staffName, onCheckIn, onClo
         <div className="space-y-4 p-5">
           {error && <p className="border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}
           {notice && <p className="border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-300">{notice}</p>}
+
+          {/* Identity alert — open fraud flags surface before anything else */}
+          {verify && verify.open_flags.length > 0 && (
+            <div className="flex items-start gap-3 border border-red-500/60 bg-red-500/10 px-4 py-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold text-red-300">
+                  Identity alert — {verify.open_flags.length} open fraud{' '}
+                  {verify.open_flags.length === 1 ? 'flag' : 'flags'}
+                </p>
+                <p className="mt-0.5 text-[11px] text-vault-muted">
+                  Latest: {verify.open_flags[0].reason} · flagged by {verify.open_flags[0].flagged_by} ·{' '}
+                  {new Date(verify.open_flags[0].created_at).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Birthday banner — the retention moment */}
           {data?.birthday_today && (

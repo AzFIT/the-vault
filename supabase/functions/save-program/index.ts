@@ -186,6 +186,28 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, flag: data })
   }
 
+  // ---- action: frontdesk_verify ----------------------------------------------
+  // Check-in identity lookup: find the client row by email and return their
+  // photo plus any OPEN fraud flags so staff can verify identity on the spot.
+  if (body.action === 'frontdesk_verify') {
+    const email = String(body.email ?? '').trim()
+    if (!email) return json({ error: 'email required' }, 400)
+    const { data: clientRow } = await supabase
+      .from('clients')
+      .select('id,full_name,photo_url')
+      .ilike('email', email)
+      .limit(1)
+      .maybeSingle()
+    if (!clientRow) return json({ client: null, open_flags: [] })
+    const { data: flags } = await supabase
+      .from('client_flags')
+      .select('id,reason,status,flagged_by,created_at')
+      .eq('client_id', (clientRow as { id: string }).id)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+    return json({ client: clientRow, open_flags: flags ?? [] })
+  }
+
   // ---- action: assign ------------------------------------------------------
   // Link (or unlink, with client_id null) a program to a client row.
   if (body.action === 'assign') {
