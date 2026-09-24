@@ -202,6 +202,7 @@ export default function MemberApp() {
   // Live from `user_subscriptions` — null while the first fetch is in flight.
   const subscription = useSubscription(account)
   const [tab, setTab] = useState<Tab>('home')
+  const [bookError, setBookError] = useState<string | null>(null)
   const [bookTick, setBookTick] = useState(0)
   useEffect(() => {
     const refresh = () => setBookTick((t) => t + 1)
@@ -319,6 +320,11 @@ export default function MemberApp() {
           {tab === 'schedule' && (
             <div>
               <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>This Week</h2>
+              {bookError && (
+                <p className="mt-3 border border-gold/50 bg-gold/10 px-3 py-2.5 text-[12px] leading-snug text-gold">
+                  {bookError}
+                </p>
+              )}
               <div className="mt-4 space-y-2">
                 {WEEK_CLASSES.map((c) => {
                   const mine = bookingFor(c.id)
@@ -338,7 +344,11 @@ export default function MemberApp() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => (mine ? cancelBooking(c.id) : bookClass(c.id))}
+                        onClick={() => {
+                          setBookError(null)
+                          const op = mine ? cancelBooking(c.id) : bookClass(c.id)
+                          op.catch((e) => setBookError(e instanceof Error ? e.message : 'Something went wrong — try again.'))
+                        }}
                         className={`shrink-0 px-3 py-2 text-[10px] uppercase tracking-[0.1em] transition-colors ${
                           mine
                             ? 'border border-vault-border text-vault-muted hover:border-red-400/60 hover:text-red-300'

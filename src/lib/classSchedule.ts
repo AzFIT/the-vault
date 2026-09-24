@@ -20,7 +20,7 @@
  */
 import { supabase } from '@/lib/supabase'
 import { getMemberSession, getMemberProfile } from '@/lib/member'
-import { getCurrentAccount } from '@/lib/memberAccounts'
+import { getCurrentAccount, CREDITS_EVENT } from '@/lib/memberAccounts'
 
 export interface ClassSlot {
   id: string
@@ -153,6 +153,10 @@ async function callFn(action: 'book' | 'cancel', classCode: string) {
   })
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
   if (!res.ok || body.error) throw new Error(String(body.error ?? `HTTP ${res.status}`))
+  // A credit moved server-side → tell the subscription hook to re-render.
+  if (typeof body.credits_remaining === 'number') {
+    window.dispatchEvent(new CustomEvent(CREDITS_EVENT, { detail: body.credits_remaining }))
+  }
   return body
 }
 
@@ -168,16 +172,17 @@ export function bookingFor(classId: string): Booking | undefined {
   return getBookings().find((b) => b.classId === classId)
 }
 
-/** Book a session — confirmed when a spot is free, otherwise waitlisted. */
+/** Book a session — confirmed when a spot is free, otherwise waitlisted.
+ *  Confirmed bookings consume one class credit server-side; a failed booking
+ *  (e.g. out of credits) REJECTS so the caller can show the server's message. */
 export async function bookClass(classId: string): Promise<Booking> {
   const existing = bookingFor(classId)
   if (existing) return existing
   try {
     await callFn('book', classId)
   } catch (e) {
-    // Callers fire-and-forget — surface the failure in the console and keep
-    // local state untouched rather than throwing an unhandled rejection.
     console.error('[classSchedule] book failed', e)
+    throw e instanceof Error ? e : new Error('Booking failed — try again.')
   } finally {
     await refreshFromCloud()
   }
@@ -189,6 +194,7 @@ export async function cancelBooking(classId: string) {
     await callFn('cancel', classId)
   } catch (e) {
     console.error('[classSchedule] cancel failed', e)
+    throw e instanceof Error ? e : new Error('Cancel failed — try again.')
   } finally {
     await refreshFromCloud()
   }

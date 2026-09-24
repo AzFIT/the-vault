@@ -177,8 +177,8 @@ export default function ClassBookingModal({ cardName, onClose }: Props) {
                       <button
                         type="button"
                         onClick={() => {
-                          if (mine) cancelBooking(c.id)
-                          else bookClass(c.id)
+                          const op = mine ? cancelBooking(c.id) : bookClass(c.id)
+                          op.catch((e) => console.warn('[ClassBookingModal] booking action failed', e))
                           refresh()
                         }}
                         className={`shrink-0 px-3 py-2 text-[10px] uppercase tracking-[0.1em] transition-colors ${

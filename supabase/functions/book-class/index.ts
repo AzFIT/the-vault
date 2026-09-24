@@ -73,20 +73,47 @@ Deno.serve(async (req: Request) => {
         p_member_label: memberLabel,
         p_member_name: memberName,
       })
-      if (error) return json({ error: error.message }, 400)
+      if (error) return json({ error: friendlyError(error.message) }, 400)
       const row = (Array.isArray(data) ? data[0] : data) as Record<string, string>
-      return json({ status: row.booking_status ?? row.status, class_id: row.booked_class_id ?? row.class_id })
+      return json({
+        status: row.booking_status ?? row.status,
+        class_id: row.booked_class_id ?? row.class_id,
+        credits_remaining: await fetchCredits(memberLabel),
+      })
     }
     if (action === 'cancel') {
       const { data, error } = await supabase.rpc('cancel_class_booking', {
         p_class_code: classCode,
         p_member_label: memberLabel,
       })
-      if (error) return json({ error: error.message }, 400)
-      return json({ canceled: Boolean(data) })
+      if (error) return json({ error: friendlyError(error.message) }, 400)
+      return json({ canceled: Boolean(data), credits_remaining: await fetchCredits(memberLabel) })
     }
     return json({ error: `unknown action: ${action || '(none)'} — use book | cancel` }, 400)
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500)
+    return json({ error: e instanceof Error ? friendlyError(e.message) : String(e) }, 500)
   }
 })
+
+/** Map engine error codes to member-friendly copy. */
+function friendlyError(message: string): string {
+  if (/NO_CREDITS/i.test(message)) {
+    return "You're out of class credits — your plan renews soon, or upgrade to book more classes."
+  }
+  return message
+}
+
+/** Fresh credit balance for a real member label (uuid), else null. */
+async function fetchCredits(memberLabel: string): Promise<number | null> {
+  if (!/^[0-9a-f-]{36}$/.test(memberLabel)) return null
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  )
+  const { data } = await supabase
+    .from('user_subscriptions')
+    .select('credits_remaining')
+    .eq('user_id', memberLabel)
+    .maybeSingle()
+  return data ? Number(data.credits_remaining) : null
+}

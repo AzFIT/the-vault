@@ -136,8 +136,10 @@ export default function MembersHome() {
   }
 
   const toggleBook = (id: string) => {
-    if (bookingFor(id)) cancelBooking(id)
-    else bookClass(id)
+    const op = bookingFor(id) ? cancelBooking(id) : bookClass(id)
+    // Out-of-credits and other server errors surface in the console here;
+    // the Member App schedule tab shows them inline.
+    op.catch((e) => console.warn('[MembersHome] booking action failed', e))
   }
 
   return (

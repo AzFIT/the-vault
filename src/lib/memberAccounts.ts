@@ -44,6 +44,8 @@ const FN_URL = 'https://gcurvjprfwecbchreieu.supabase.co/functions/v1/member-aut
 const BUILDER_SECRET = 'vault_bld_8f3a91c27d54e6b0'
 const CACHE_KEY = 'vault-member-account-cache'
 export const ACCOUNT_SESSION_EVENT = 'vault-member-account-session-changed'
+/** Fired with `detail` = fresh credits_remaining after any booking/cancel. */
+export const CREDITS_EVENT = 'vault-credits-changed'
 
 function notify() {
   window.dispatchEvent(new Event(ACCOUNT_SESSION_EVENT))
@@ -250,11 +252,20 @@ export function useSubscription(account: MemberAccount | null): AccountSubscript
     let alive = true
     setSubscription(null)
     if (!account) return
-    void fetchSubscription(account).then((s) => {
-      if (alive) setSubscription(s)
-    })
+    const load = (credits?: number) => {
+      void fetchSubscription(account).then((s) => {
+        if (!alive) return
+        // Booking responses carry a fresh balance — patch it in without a refetch.
+        if (s && credits !== undefined) s = { ...s, creditsRemaining: credits }
+        setSubscription(s)
+      })
+    }
+    load()
+    const onCredits = (e: Event) => load((e as CustomEvent<number>).detail)
+    window.addEventListener(CREDITS_EVENT, onCredits)
     return () => {
       alive = false
+      window.removeEventListener(CREDITS_EVENT, onCredits)
     }
   }, [account])
   return subscription
