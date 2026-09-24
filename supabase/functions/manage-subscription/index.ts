@@ -5,6 +5,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 // by the owner portal's Members page. Actions:
 //   list_members    { query? }              → search member_profiles (name/phone), with subscription
 //   member_detail   { user_id }             → profile + auth email + subscription + recent credit ledger
+//   credit_activity {}                      → latest ledger rows across ALL members (renewals + adjustments)
 //   renew           { user_id }             → roll period forward, reset credits
 //   change_plan     { user_id, plan_code }  → swap plan, reset allowance
 //   adjust_credits  { user_id, delta, reason } → manual adjustment, clamped at 0
@@ -79,6 +80,38 @@ Deno.serve(async (req: Request) => {
       })
     }
 
+    if (action === 'credit_activity') {
+      // Latest ledger rows across every member — auto-renewals and owner
+      // adjustments in one feed so the owner can watch the cron working.
+      const { data: rows, error } = await supabase
+        .from('credit_ledger')
+        .select('user_id,delta,reason,class_code,created_at')
+        .order('created_at', { ascending: false })
+        .limit(25)
+      if (error) return json({ error: error.message }, 400)
+      const ids = [...new Set((rows ?? []).map((r: Record<string, unknown>) => r.user_id))]
+      const { data: profiles } = await supabase
+        .from('member_profiles')
+        .select('id,first_name,last_name')
+        .in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
+      const nameById = new Map<string, string>(
+        (profiles ?? []).map((p: Record<string, unknown>) => [
+          String(p.id),
+          `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '(unnamed)',
+        ]),
+      )
+      return json({
+        activity: (rows ?? []).map((r: Record<string, unknown>) => ({
+          user_id: r.user_id,
+          member_name: nameById.get(String(r.user_id)) ?? '(removed member)',
+          delta: r.delta,
+          reason: r.reason,
+          is_auto: typeof r.reason === 'string' && /^monthly renewal \(/.test(r.reason),
+          created_at: r.created_at,
+        })),
+      })
+    }
+
     const userId = String(body.user_id ?? '').trim()
     if (action === 'member_detail') {
       if (!userId) return json({ error: 'user_id required' }, 400)
@@ -126,7 +159,7 @@ Deno.serve(async (req: Request) => {
       if (error) return json({ error: mapError(error.message) }, 400)
       return json({ adjusted: true, credits_remaining: data })
     }
-    return json({ error: `unknown action: ${action || '(none)'} — use list_members | member_detail | renew | change_plan | adjust_credits` }, 400)
+    return json({ error: `unknown action: ${action || '(none)'} — use list_members | member_detail | credit_activity | renew | change_plan | adjust_credits` }, 400)
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500)
   }

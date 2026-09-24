@@ -14,8 +14,10 @@ import {
   adjustMemberCredits,
   changeMemberPlan,
   getMemberDetail,
+  listCreditActivity,
   listMembers,
   renewMember,
+  type CreditActivityRow,
   type MemberDetail,
   type MemberListRow,
 } from '@/lib/memberAdmin'
@@ -42,7 +44,20 @@ export default function PortalMembers() {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  const [activity, setActivity] = useState<CreditActivityRow[]>([])
   const debounceRef = useRef<number | undefined>(undefined)
+
+  const refreshActivity = useCallback(async () => {
+    try {
+      setActivity(await listCreditActivity())
+    } catch {
+      // The feed is supplementary — a failure here never blocks the page.
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshActivity()
+  }, [refreshActivity])
 
   const refreshList = useCallback(async (q: string) => {
     setLoadingList(true)
@@ -83,7 +98,7 @@ export default function PortalMembers() {
     try {
       const result = await fn()
       await openMember(selectedId) // re-pull detail + ledger (clears the notice)
-      await refreshList(query)
+      await Promise.all([refreshList(query), refreshActivity()])
       setNotice({ ok: true, text: successText(result) }) // set after refresh so it survives
     } catch (e) {
       setNotice({ ok: false, text: e instanceof Error ? e.message : 'Action failed.' })
@@ -384,6 +399,57 @@ export default function PortalMembers() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ————— Credit activity across all members ————— */}
+      <div className="border border-vault-border">
+        <div className="flex items-center justify-between border-b border-vault-border px-4 py-2.5">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-vault-faint">
+            Credit activity · latest {activity.length} across all members
+          </p>
+          <button
+            type="button"
+            onClick={() => void refreshActivity()}
+            className="text-vault-faint transition-colors hover:text-gold"
+            aria-label="Refresh activity"
+          >
+            <RefreshCcw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {activity.length === 0 ? (
+          <p className="px-4 py-6 text-center text-[12px] text-vault-muted">No credit movements yet.</p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto">
+            {activity.map((row, i) => (
+              <div
+                key={`${row.user_id}-${row.created_at}-${i}`}
+                className="flex items-center gap-3 border-b border-vault-border px-4 py-2 last:border-b-0"
+              >
+                <span
+                  className={`tnum w-10 shrink-0 text-right text-[13px] font-bold ${
+                    row.delta > 0 ? 'text-emerald-300' : 'text-red-300'
+                  }`}
+                >
+                  {row.delta > 0 ? `+${row.delta}` : row.delta}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12px] text-white">
+                    {row.member_name}
+                    <span className="text-vault-muted"> — {row.reason}</span>
+                  </span>
+                </span>
+                {row.is_auto && (
+                  <span className="shrink-0 border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-emerald-300">
+                    Auto-renew
+                  </span>
+                )}
+                <span className="shrink-0 text-[10px] text-vault-faint">
+                  {new Date(row.created_at).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -60,6 +60,20 @@ export interface MemberDetail {
   ledger: LedgerRow[]
 }
 
+export interface CreditActivityRow {
+  user_id: string
+  member_name: string
+  delta: number
+  reason: string
+  is_auto: boolean
+  created_at: string
+}
+
+export async function listCreditActivity(): Promise<CreditActivityRow[]> {
+  const data = await invoke<{ activity: CreditActivityRow[] }>({ action: 'credit_activity' })
+  return data.activity
+}
+
 export async function listMembers(query?: string): Promise<MemberListRow[]> {
   const data = await invoke<{ members: MemberListRow[] }>({
     action: 'list_members',
