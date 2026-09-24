@@ -9,16 +9,27 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, LockKeyhole } from 'lucide-react'
+import { ArrowLeft, LockKeyhole } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { MEMBER_PROFILES, getMemberProfile, signInAsMember } from '@/lib/member'
 import { requestVaultEntry } from '@/lib/vaultEntry'
+import UnlockButton from '@/components/UnlockButton'
 
 export default function MemberLogin() {
   const [selected, setSelected] = useState('rachel-cheung')
   const selectedProfile = getMemberProfile(selected)
 
+  const arm = () => {
+    signInAsMember(selected)
+    return true
+  }
+
   const enter = () => {
+    if (selectedProfile) requestVaultEntry(selectedProfile.home)
+  }
+
+  // Double-click on a profile row is a power shortcut — straight in.
+  const enterDirect = () => {
     const profile = signInAsMember(selected)
     if (profile) requestVaultEntry(profile.home)
   }
@@ -99,7 +110,7 @@ export default function MemberLogin() {
                   role="radio"
                   aria-checked={active}
                   onClick={() => setSelected(p.id)}
-                  onDoubleClick={enter}
+                  onDoubleClick={enterDirect}
                   className={`flex w-full items-center gap-3 border px-4 py-3.5 text-left transition-colors ${
                     active
                       ? 'border-gold bg-white/[0.04]'
@@ -131,13 +142,12 @@ export default function MemberLogin() {
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={enter}
-            className="mt-6 flex w-full items-center justify-center gap-2 bg-white px-6 py-3.5 text-[12px] font-bold uppercase tracking-[0.14em] text-vault-btn-text transition-opacity hover:opacity-85"
-          >
-            Enter as {selectedProfile?.name.split(' ')[0] ?? 'member'} <ArrowRight className="h-4 w-4" />
-          </button>
+          <UnlockButton
+            idleLabel={`Enter as ${selectedProfile?.name.split(' ')[0] ?? 'member'}`}
+            onArm={arm}
+            onEnter={enter}
+            className="mt-6 py-3.5"
+          />
 
           <div className="mt-5 flex items-center justify-between">
             <Link

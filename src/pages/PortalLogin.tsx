@@ -17,11 +17,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, KeyRound, Lock } from 'lucide-react'
+import { ArrowLeft, KeyRound, Lock } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { STAFF_PROFILES, getProfile, signInAs } from '@/lib/staff'
 import { signInAsMember } from '@/lib/member'
 import { requestVaultEntry } from '@/lib/vaultEntry'
+import UnlockButton from '@/components/UnlockButton'
 
 interface TesterAccount {
   /** accepted logins (case-insensitive) */
@@ -57,22 +58,40 @@ export default function PortalLogin() {
   const [selected, setSelected] = useState('rachel-cheung')
   const selectedProfile = getProfile(selected)
 
-  const enterWithCard = () => {
+  // Validate + create the session. Returning false aborts the unlock
+  // animation (button stays gold); the sweep fires later via onEnter.
+  const armCard = () => {
     const account = findAccount(login)
     if (!account) {
       setError('Unknown account — try owner@vault.hk, staff@vault.hk, trainer@vault.hk, client@vault.hk or members@vault.hk.')
-      return
+      return false
     }
     if (!password.trim()) {
       setError('Enter any password — real authentication arrives with the backend.')
-      return
+      return false
     }
     if (account.session.kind === 'staff') signInAs(account.session.id)
     else signInAsMember(account.session.id)
-    requestVaultEntry(account.home)
+    setError(null)
+    return true
   }
 
-  const enter = () => {
+  const enterCard = () => {
+    requestVaultEntry(findAccount(login)?.home ?? '/portal')
+  }
+
+  const armQuick = () => {
+    signInAs(selected)
+    return true
+  }
+
+  const enterQuick = () => {
+    const profile = getProfile(selected)
+    if (profile) requestVaultEntry(profile.home)
+  }
+
+  // Double-click on a profile row is a power shortcut — straight in, no ceremony hold.
+  const enterDirect = () => {
     const profile = signInAs(selected)
     if (profile) requestVaultEntry(profile.home)
   }
@@ -154,7 +173,7 @@ export default function PortalLogin() {
                     setError(null)
                   }}
                   onFocus={() => setSuggestOpen(true)}
-                  onKeyDown={(e) => e.key === 'Enter' && enterWithCard()}
+                  onKeyDown={(e) => e.key === 'Enter' && armCard() && enterCard()}
                 />
                 {/* Tester suggestions — tap one to fill email + password.
                     Removed before real authentication ships. */}
@@ -203,7 +222,7 @@ export default function PortalLogin() {
                     setPassword(e.target.value)
                     setError(null)
                   }}
-                  onKeyDown={(e) => e.key === 'Enter' && enterWithCard()}
+                  onKeyDown={(e) => e.key === 'Enter' && armCard() && enterCard()}
                 />
               </div>
               {error && (
@@ -211,13 +230,12 @@ export default function PortalLogin() {
                   {error}
                 </p>
               )}
-              <button
-                type="button"
-                onClick={enterWithCard}
-                className="flex w-full items-center justify-center gap-2 bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.14em] text-vault-btn-text transition-opacity hover:opacity-85"
-              >
-                Open the vault <ArrowRight className="h-4 w-4" />
-              </button>
+              <UnlockButton
+                idleLabel="Open the vault"
+                onArm={armCard}
+                onEnter={enterCard}
+                className="py-3"
+              />
             </div>
           </div>
 
@@ -233,7 +251,7 @@ export default function PortalLogin() {
                   role="radio"
                   aria-checked={active}
                   onClick={() => setSelected(p.id)}
-                  onDoubleClick={enter}
+                  onDoubleClick={enterDirect}
                   className={`flex w-full items-center gap-3 border px-4 py-3 text-left transition-colors ${
                     active
                       ? 'border-gold bg-white/[0.04]'
@@ -265,13 +283,12 @@ export default function PortalLogin() {
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={enter}
-            className="btn-ghost mt-4 w-full text-[11px]"
-          >
-            Enter as {selectedProfile?.name.split(' ')[0] ?? 'staff'} <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          <UnlockButton
+            idleLabel={`Enter as ${selectedProfile?.name.split(' ')[0] ?? 'staff'}`}
+            onArm={armQuick}
+            onEnter={enterQuick}
+            className="mt-4 py-2.5 text-[11px]"
+          />
 
           <div className="mt-5 flex items-center justify-between">
             <Link
