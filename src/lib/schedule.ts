@@ -2,9 +2,15 @@
  * Schedule data layer — the owner portal's week grid (wireframe screen 04).
  * Three block types: 'pt' (gold, revenue-bearing 1:1/2:1), 'class' (white,
  * group class with capacity), 'open' (dashed, bookable room slot).
- * Blocks are dated; the seed is generated against the current week so it
- * always lands on "this week" the first time the page is opened. No backend
- * yet — edits persist to localStorage.
+ *
+ * Phase 2 of the cloud migration: blocks persist in Supabase
+ * (`schedule_blocks`, public read via RLS) and writes go through the
+ * `manage-schedule` Edge Function. The exported sync API is unchanged —
+ * `listBlocks()` reads a module cache seeded with the demo week so first
+ * paint is instant, `refreshSchedule()` hydrates from the cloud and fires
+ * SCHEDULE_EVENT, and the CRUD functions are async underneath (pages wire
+ * them with `.then()` / the event). Owner and front-desk grids share one
+ * cloud truth: an edit in either surface appears in the other.
  */
 
 export type BlockType = 'pt' | 'class' | 'open'
@@ -38,7 +44,10 @@ export const GRID_START_MIN = 7 * 60
 export const GRID_END_MIN = 21 * 60 + 30
 export const PX_PER_MIN = 1.2
 
-const STORAGE_KEY = 'vault-schedule-v1'
+const FN_URL = 'https://gcurvjprfwecbchreieu.supabase.co/functions/v1/manage-schedule'
+const BUILDER_SECRET = 'vault_bld_8f3a91c27d54e6b0'
+
+export const SCHEDULE_EVENT = 'vault-schedule-changed'
 
 // ---------------------------------------------------------------------------
 // Date helpers (local time, Monday-first weeks)
@@ -125,53 +134,125 @@ function buildSeed(): ScheduleBlock[] {
 }
 
 // ---------------------------------------------------------------------------
-// Store
+// Store — module cache over Supabase, seeded with the demo week
 // ---------------------------------------------------------------------------
 
-function readStored(): ScheduleBlock[] | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as ScheduleBlock[]) : null
-  } catch {
-    return null
+function notify() {
+  window.dispatchEvent(new Event(SCHEDULE_EVENT))
+}
+
+/** Demo-week cache so the grid renders before the cloud round-trip. */
+const cache: ScheduleBlock[] = buildSeed()
+/** Weeks already ensured server-side (avoid a ensure_week call per render). */
+const ensuredWeeks = new Set<string>()
+
+async function callFn(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const res = await fetch(FN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: BUILDER_SECRET, ...body }),
+  })
+  const parsed = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok || parsed.error) throw new Error(String(parsed.error ?? `HTTP ${res.status}`))
+  return parsed
+}
+
+interface CloudBlock {
+  id: string
+  type: BlockType
+  title: string
+  date: string
+  start_min: number
+  duration_min: number
+  room: string
+  coach: string | null
+  capacity: number | null
+  enrolled: number | null
+  note: string | null
+}
+
+function fromCloud(b: CloudBlock): ScheduleBlock {
+  return {
+    id: b.id,
+    type: b.type,
+    title: b.title,
+    date: String(b.date).slice(0, 10),
+    startMin: b.start_min,
+    durationMin: b.duration_min,
+    room: b.room,
+    coach: b.coach ?? undefined,
+    capacity: b.capacity ?? undefined,
+    enrolled: b.enrolled ?? undefined,
+    note: b.note ?? undefined,
   }
 }
 
-function writeStored(blocks: ScheduleBlock[]) {
+/** Load a week range from the cloud into the cache. Dates: ISO yyyy-mm-dd. */
+export async function refreshSchedule(fromIso: string, toIso: string): Promise<void> {
+  const { blocks } = (await callFn({ action: 'list', from: fromIso, to: toIso })) as {
+    blocks: CloudBlock[]
+  }
+  const incoming = new Set(blocks.map((b) => b.id))
+  // Drop cached rows inside the range that no longer exist upstream, then
+  // upsert the fetched rows (other weeks in the cache are untouched).
+  for (let i = cache.length - 1; i >= 0; i--) {
+    if (cache[i].date >= fromIso && cache[i].date <= toIso && !incoming.has(cache[i].id)) {
+      cache.splice(i, 1)
+    }
+  }
+  for (const b of blocks) {
+    const row = fromCloud(b)
+    const idx = cache.findIndex((c) => c.id === row.id)
+    if (idx >= 0) cache[idx] = row
+    else cache.push(row)
+  }
+  notify()
+}
+
+/** Seed the demo week server-side if that week has no blocks yet. */
+export async function ensureWeek(dateIso: string): Promise<void> {
+  const monday = iso(mondayOf(new Date(`${dateIso}T00:00:00`)))
+  if (ensuredWeeks.has(monday)) return
+  ensuredWeeks.add(monday)
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
+    await callFn({ action: 'ensure_week', date: dateIso })
   } catch {
-    // storage unavailable — schedule stays seed-only
+    ensuredWeeks.delete(monday) // allow retry on next visit
   }
 }
 
 export function listBlocks(): ScheduleBlock[] {
-  const stored = readStored()
-  if (stored) return stored
-  const seed = buildSeed()
-  writeStored(seed)
-  return seed
+  return cache
 }
 
-export function addBlock(input: Omit<ScheduleBlock, 'id'>): ScheduleBlock[] {
-  const rows = listBlocks()
-  const updated = [...rows, { ...input, id: `blk-${Date.now().toString(36)}` }]
-  writeStored(updated)
-  return updated
+export async function addBlock(input: Omit<ScheduleBlock, 'id'>): Promise<void> {
+  const { block } = (await callFn({ action: 'create', block: input })) as { block: CloudBlock }
+  // Optimistic cache update — the grid reflects the write immediately even
+  // if the follow-up refresh round-trip fails.
+  cache.push(fromCloud(block))
+  notify()
+  await refreshSchedule(input.date, input.date).catch(() => undefined)
 }
 
-export function updateBlock(id: string, patch: Partial<ScheduleBlock>): ScheduleBlock[] {
-  const rows = listBlocks()
-  const updated = rows.map((r) => (r.id === id ? { ...r, ...patch } : r))
-  writeStored(updated)
-  return updated
+export async function updateBlock(id: string, patch: Partial<ScheduleBlock>): Promise<void> {
+  const current = cache.find((r) => r.id === id)
+  // JSON drops undefined keys — convert them to null so clearing a field
+  // (coach, note…) actually writes NULL upstream instead of being ignored.
+  const cleaned = Object.fromEntries(
+    Object.entries(patch).map(([k, v]) => [k, v === undefined ? null : v]),
+  )
+  const { block } = (await callFn({ action: 'update', id, patch: cleaned })) as { block: CloudBlock }
+  const idx = cache.findIndex((r) => r.id === id)
+  if (idx >= 0) cache[idx] = fromCloud(block)
+  notify()
+  if (current) await refreshSchedule(current.date, current.date).catch(() => undefined)
 }
 
-export function deleteBlock(id: string): ScheduleBlock[] {
-  const rows = listBlocks()
-  const updated = rows.filter((r) => r.id !== id)
-  writeStored(updated)
-  return updated
+export async function deleteBlock(id: string): Promise<void> {
+  const current = cache.find((r) => r.id === id)
+  await callFn({ action: 'delete', id })
+  const idx = cache.findIndex((r) => r.id === id)
+  if (idx >= 0) cache.splice(idx, 1)
+  notify()
+  if (current) await refreshSchedule(current.date, current.date).catch(() => undefined)
 }

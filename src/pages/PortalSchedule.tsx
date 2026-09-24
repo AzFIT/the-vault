@@ -6,9 +6,11 @@
  * dashed = bookable open room slot. Week/day toggle, ‹ › week navigation, legend
  * filters, click any empty time slot to create a block at that day + time,
  * and a click-to-edit drawer (type-first: class blocks pick from class
- * templates). Edits persist to localStorage; drag-to-move is a later phase.
+ * templates). Blocks persist in Supabase via the manage-schedule edge
+ * function; edits made here appear on the front-desk grid (and vice versa).
+ * Drag-to-move is a later phase.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-react'
 import {
@@ -16,9 +18,11 @@ import {
   GRID_END_MIN,
   GRID_START_MIN,
   PX_PER_MIN,
+  SCHEDULE_EVENT,
   addBlock,
   addDays,
   deleteBlock,
+  ensureWeek,
   fmtDayHeader,
   fmtHour12,
   fmtTime,
@@ -26,6 +30,7 @@ import {
   iso,
   listBlocks,
   mondayOf,
+  refreshSchedule,
   updateBlock,
 } from '@/lib/schedule'
 import type { BlockType, ScheduleBlock } from '@/lib/schedule'
@@ -114,6 +119,28 @@ export default function PortalSchedule() {
   const monday = useMemo(() => addDays(mondayOf(new Date()), weekOffset * 7), [weekOffset])
   const weekDates = useMemo(() => Array.from({ length: 5 }, (_, i) => addDays(monday, i)), [monday])
 
+  // Cloud hydration: seed the demo week server-side on first view, load the
+  // viewed range, and re-render whenever the store notifies (own writes or
+  // another staff member's edits — owner and front desk share one truth).
+  useEffect(() => {
+    const from = iso(monday)
+    const to = iso(addDays(monday, 6))
+    const hydrate = (attempt: number) =>
+      ensureWeek(from)
+        .catch(() => undefined)
+        .then(() => refreshSchedule(from, to))
+        .catch((e) => {
+          console.error('[schedule] refresh failed', e)
+          if (attempt < 1) setTimeout(() => hydrate(attempt + 1), 3000)
+        })
+    hydrate(0)
+  }, [monday])
+  useEffect(() => {
+    const sync = () => setBlocks(listBlocks())
+    window.addEventListener(SCHEDULE_EVENT, sync)
+    return () => window.removeEventListener(SCHEDULE_EVENT, sync)
+  }, [])
+
   /** Day view: today when looking at the current week, otherwise Monday. */
   const dayDate = useMemo(() => {
     if (weekOffset === 0) {
@@ -164,13 +191,19 @@ export default function PortalSchedule() {
       coach: draft.coach?.trim() || undefined,
       note: draft.note?.trim() || undefined,
     }
-    if (draft.id) setBlocks(updateBlock(draft.id, payload))
-    else setBlocks(addBlock(payload))
+    const saved = draft.id ? updateBlock(draft.id, payload) : addBlock(payload)
+    saved
+      .catch((err) => console.error('[schedule] save failed', err))
+      .finally(() => setBlocks(listBlocks()))
     setDraft(null)
   }
 
   const removeDraft = () => {
-    if (draft?.id) setBlocks(deleteBlock(draft.id))
+    if (draft?.id) {
+      deleteBlock(draft.id)
+        .catch((err) => console.error('[schedule] delete failed', err))
+        .finally(() => setBlocks(listBlocks()))
+    }
     setDraft(null)
   }
 
