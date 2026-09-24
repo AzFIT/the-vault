@@ -38,6 +38,16 @@ export interface AccountSubscription {
   status: 'active' | 'past_due' | 'canceled' | 'frozen'
   currentPeriodEnd: string
   creditsRemaining: number
+  planCode?: string
+}
+
+/** A row of the public `membership_plans` catalog. */
+export interface MembershipPlan {
+  code: string
+  name: string
+  monthlyCredits: number
+  priceHkd: number
+  blurb: string
 }
 
 const FN_URL = 'https://gcurvjprfwecbchreieu.supabase.co/functions/v1/member-auth'
@@ -228,7 +238,7 @@ export function signOutAccount() {
 async function fetchSubscription(account: MemberAccount): Promise<AccountSubscription | null> {
   const { data, error } = await supabase
     .from('user_subscriptions')
-    .select('membership_name,status,current_period_end,credits_remaining')
+    .select('membership_name,status,current_period_end,credits_remaining,plan_code')
     .eq('user_id', account.id)
     .maybeSingle()
   if (error || !data) return null
@@ -238,7 +248,40 @@ async function fetchSubscription(account: MemberAccount): Promise<AccountSubscri
     status: String(row.status) as AccountSubscription['status'],
     currentPeriodEnd: String(row.current_period_end),
     creditsRemaining: Number(row.credits_remaining),
+    planCode: String(row.plan_code ?? ''),
   }
+}
+
+/**
+ * The public plan catalog (active plans only, readable by anyone with the
+ * publishable key via RLS). Returns [] while loading.
+ */
+export function useMembershipPlans(): MembershipPlan[] {
+  const [plans, setPlans] = useState<MembershipPlan[]>([])
+  useEffect(() => {
+    let alive = true
+    void supabase
+      .from('membership_plans')
+      .select('code,name,monthly_credits,price_hkd,blurb')
+      .eq('active', true)
+      .order('sort')
+      .then(({ data }) => {
+        if (!alive || !data) return
+        setPlans(
+          (data as Record<string, unknown>[]).map((p) => ({
+            code: String(p.code),
+            name: String(p.name),
+            monthlyCredits: Number(p.monthly_credits),
+            priceHkd: Number(p.price_hkd),
+            blurb: String(p.blurb ?? ''),
+          })),
+        )
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+  return plans
 }
 
 /**

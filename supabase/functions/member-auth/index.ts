@@ -96,8 +96,17 @@ async function handle(req: Request): Promise<Response> {
     role: 'member',
     qr_code_secret: qr,
   })
+  // Starter subscription comes from the plan catalog (default: Gym + Group Classes).
+  const { data: starterPlan } = await supabase
+    .from('membership_plans')
+    .select('name,monthly_credits')
+    .eq('code', 'gym_classes')
+    .maybeSingle()
   const { error: subError } = await supabase.from('user_subscriptions').insert({
     user_id: data.user.id,
+    plan_code: 'gym_classes',
+    membership_name: starterPlan?.name ?? 'Gym + Group Classes',
+    credits_remaining: starterPlan?.monthly_credits ?? 8,
   })
   if (profileError || subError) {
     // Roll the auth user back so a failed profile/subscription doesn't leave

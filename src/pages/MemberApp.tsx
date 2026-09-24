@@ -29,6 +29,7 @@ import {
   getCurrentAccount,
   signInAccount,
   signOutAccount,
+  useMembershipPlans,
   useSubscription,
   type MemberAccount,
 } from '@/lib/memberAccounts'
@@ -201,6 +202,7 @@ export default function MemberApp() {
   const [account, setAccount] = useState<MemberAccount | null>(() => getCurrentAccount())
   // Live from `user_subscriptions` — null while the first fetch is in flight.
   const subscription = useSubscription(account)
+  const plans = useMembershipPlans()
   const [tab, setTab] = useState<Tab>('home')
   const [bookError, setBookError] = useState<string | null>(null)
   const [bookTick, setBookTick] = useState(0)
@@ -427,6 +429,48 @@ export default function MemberApp() {
                 >
                   <Lock className="h-4 w-4" /> Lock out
                 </button>
+              </div>
+
+              {/* Plan catalog — public read; switching plans lands with the front desk for now */}
+              <div className="mt-4 border border-vault-border bg-vault-surface/50 p-5">
+                <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-vault-faint">
+                  <Crown className="h-3.5 w-3.5 text-gold" /> Plans
+                </p>
+                <div className="mt-3 space-y-2">
+                  {plans.length === 0 && (
+                    <p className="text-[12px] text-vault-muted">Loading plans…</p>
+                  )}
+                  {plans.map((p) => {
+                    const current = subscription?.planCode === p.code
+                    return (
+                      <div
+                        key={p.code}
+                        className={`flex items-center justify-between gap-3 border px-3 py-2.5 ${
+                          current ? 'border-gold/60 bg-gold/5' : 'border-vault-border'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-bold text-white">
+                            {p.name}
+                            {current && <span className="ml-2 text-[9px] uppercase tracking-[0.14em] text-gold">Current</span>}
+                          </p>
+                          <p className="truncate text-[11px] text-vault-muted">
+                            {p.blurb}
+                            {p.monthlyCredits > 0 ? ` · ${p.monthlyCredits} class credits/mo` : ''}
+                          </p>
+                        </div>
+                        <p className="tnum shrink-0 text-[13px] font-bold text-gold">
+                          HK${p.priceHkd.toLocaleString()}
+                          <span className="block text-right text-[9px] font-normal text-vault-faint">/month</span>
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="mt-3 text-[10px] leading-relaxed text-vault-faint">
+                  To switch plans, talk to the front desk — plan changes and renewals are handled
+                  in the owner portal so your billing stays correct.
+                </p>
               </div>
             </div>
           )}
