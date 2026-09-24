@@ -475,6 +475,31 @@ export default function SupabaseClients() {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] text-white">{c.full_name}</span>
                 <span className="block truncate text-[10px] text-vault-faint">{c.email ?? 'no email'}</span>
+                {c.activity && (
+                  <span className="mt-1 block">
+                    <span
+                      className={`tnum inline-flex items-center gap-1 border px-1.5 py-px text-[8px] uppercase tracking-[0.1em] ${
+                        c.activity.done >= c.activity.total
+                          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                          : c.activity.done > 0
+                            ? 'border-gold/50 bg-gold/10 text-vault-gold'
+                            : 'border-vault-border text-vault-faint'
+                      }`}
+                    >
+                      W{c.activity.week} · {c.activity.done}/{c.activity.total} done
+                    </span>
+                    <span className="mt-1 block h-0.5 w-full bg-vault-surface-2">
+                      <span
+                        className={`block h-full transition-all duration-300 ${
+                          c.activity.done >= c.activity.total ? 'bg-emerald-400' : 'bg-gold'
+                        }`}
+                        style={{
+                          width: `${Math.round((c.activity.done / Math.max(1, c.activity.total)) * 100)}%`,
+                        }}
+                      />
+                    </span>
+                  </span>
+                )}
               </span>
               <span
                 className={`shrink-0 border px-1.5 py-0.5 text-[8px] uppercase tracking-[0.1em] ${

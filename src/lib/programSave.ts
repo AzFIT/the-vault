@@ -70,6 +70,8 @@ export interface ClientSummary {
   full_name: string
   email: string | null
   status: string | null
+  /** Current-week program activity aggregated by the clients action. */
+  activity?: { week: number; done: number; total: number } | null
 }
 
 export async function loadProgramsFromSupabase(): Promise<LoadedProgram[]> {

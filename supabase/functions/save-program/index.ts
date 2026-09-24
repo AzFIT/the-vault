@@ -40,14 +40,63 @@ Deno.serve(async (req: Request) => {
   const trainerId = String(body.trainer_id ?? DEFAULT_TRAINER)
 
   // ---- action: clients -----------------------------------------------------
+  // Roster rows + a current-week activity summary per client (program workouts
+  // and completions aggregated server-side so the cards don't need N+1 calls).
   if (body.action === 'clients') {
-    const { data, error } = await supabase
+    const { data: clients, error } = await supabase
       .from('clients')
       .select('id,full_name,email,status')
       .eq('trainer_id', trainerId)
       .order('full_name')
     if (error) return json({ error: error.message }, 500)
-    return json({ clients: data ?? [] })
+    const list = (clients ?? []) as { id: string; full_name: string; email: string | null; status: string | null }[]
+    if (list.length === 0) return json({ clients: [] })
+
+    const ids = list.map((c) => c.id)
+    const [{ data: programs }, { data: completions }] = await Promise.all([
+      supabase
+        .from('programs')
+        .select('id,client_id,duration_weeks,start_date,updated_at,workouts(id)')
+        .in('client_id', ids)
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('client_session_completions')
+        .select('client_id,workout_id,week_number')
+        .in('client_id', ids),
+    ])
+
+    // Current program per client = most recently updated assignment.
+    const current = new Map<string, { id: string; duration: number; start: string | null; workoutIds: string[] }>()
+    for (const p of (programs ?? []) as Record<string, unknown>[]) {
+      const cid = String(p.client_id ?? '')
+      if (!cid || current.has(cid)) continue
+      current.set(cid, {
+        id: String(p.id),
+        duration: Math.max(1, Number(p.duration_weeks ?? 1) || 1),
+        start: (p.start_date as string | null) ?? null,
+        workoutIds: ((p.workouts ?? []) as { id: string }[]).map((w) => w.id),
+      })
+    }
+
+    const now = Date.now()
+    const byClient = new Map<string, { week: number; done: number; total: number }>()
+    for (const [cid, prog] of current) {
+      if (prog.workoutIds.length === 0) continue
+      let week = 1
+      if (prog.start) {
+        const days = Math.floor((now - new Date(prog.start).getTime()) / 86_400_000)
+        week = Math.min(Math.max(1, Math.floor(days / 7) + 1), prog.duration)
+      }
+      const idsSet = new Set(prog.workoutIds)
+      const done = ((completions ?? []) as Record<string, unknown>[]).filter(
+        (c) => String(c.client_id) === cid && Number(c.week_number) === week && idsSet.has(String(c.workout_id)),
+      ).length
+      byClient.set(cid, { week, done, total: prog.workoutIds.length })
+    }
+
+    return json({
+      clients: list.map((c) => ({ ...c, activity: byClient.get(c.id) ?? null })),
+    })
   }
 
   // ---- action: assign ------------------------------------------------------
