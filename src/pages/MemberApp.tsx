@@ -4,10 +4,10 @@
  * Profile), a home screen dominated by the entry QR code with the next
  * booked class right under it, and 1-click booking on the schedule.
  *
- * Auth: creating an account writes a local record shaped to the `users`
- * table (role 'member', qr_code_secret, created_at) and a mock subscription
- * shaped to `user_subscriptions`. Swap these bodies for Supabase calls when
- * the backend ships — shapes are already schema-true.
+ * Auth: real Supabase Auth — signup goes through the member-auth Edge
+ * Function (auth user + member_profiles row), sign-in is a plain
+ * supabase.auth call, and bookings are recorded under the auth user id.
+ * Only the subscription is still a labeled stub until that table ships.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -117,11 +117,12 @@ function AuthCard({ onAuthed }: { onAuthed: () => void }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const submit = () => {
+  const submit = async () => {
+    setError(null)
     const result =
       mode === 'signup'
-        ? createAccount({ firstName, lastName, email, phone, password })
-        : signInAccount(email, password)
+        ? await createAccount({ firstName, lastName, email, phone, password })
+        : await signInAccount(email, password)
     if (result.error) setError(result.error)
     else {
       onAuthed()
@@ -187,7 +188,7 @@ function AuthCard({ onAuthed }: { onAuthed: () => void }) {
           {mode === 'signup' ? 'Join the Vault' : 'Sign in'}
         </button>
         <p className="text-center text-[10px] text-vault-faint">
-          Mock auth — accounts live in this browser only until Supabase ships.
+          Real cloud accounts — your sign-in works on any device.
         </p>
       </div>
     </div>

@@ -8,8 +8,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 // so concurrent members can never overbook the last spot.
 //
 // Same demo-grade gate as sync-sheets: a shared builder secret instead of
-// real Supabase Auth. member_label is the tester-era identity; it becomes the
-// auth user id when real auth ships.
+// real Supabase Auth gating the endpoint. Identity, however, is real: pass
+// a member's access token as `user_token` and the booking is recorded under
+// their auth user id; without it, member_label is the tester-era identity.
 const BUILDER_SECRET = 'vault_bld_8f3a91c27d54e6b0'
 
 const CORS_HEADERS = {
@@ -39,14 +40,31 @@ Deno.serve(async (req: Request) => {
 
   const action = String(body.action ?? '')
   const classCode = String(body.class_code ?? '').trim()
-  const memberLabel = String(body.member_label ?? '').trim().toLowerCase()
-  const memberName = body.member_name ? String(body.member_name).trim() : null
-  if (!classCode || !memberLabel) return json({ error: 'class_code and member_label required' }, 400)
+  let memberLabel = String(body.member_label ?? '').trim().toLowerCase()
+  let memberName = body.member_name ? String(body.member_name).trim() : null
+  if (!classCode) return json({ error: 'class_code required' }, 400)
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
+
+  // Real-auth path: a member JWT wins over the tester label — verify it
+  // server-side and book under the auth user id so bookings belong to the
+  // signed-in account (and RLS "read own profile" stays meaningful).
+  const userToken = body.user_token ? String(body.user_token) : ''
+  if (userToken) {
+    const { data: authData, error: authError } = await supabase.auth.getUser(userToken)
+    if (authError || !authData.user) return json({ error: 'invalid or expired session — sign in again' }, 401)
+    memberLabel = authData.user.id
+    const { data: profile } = await supabase
+      .from('member_profiles')
+      .select('first_name, last_name')
+      .eq('id', authData.user.id)
+      .maybeSingle()
+    memberName = profile ? `${profile.first_name} ${profile.last_name}`.trim() : (memberName ?? authData.user.email ?? null)
+  }
+  if (!memberLabel) return json({ error: 'member_label required' }, 400)
 
   try {
     if (action === 'book') {

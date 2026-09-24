@@ -14,8 +14,9 @@
  * edits: `WEEK_CLASSES` hydrates from the cloud (in place, so existing
  * references update) and BOOKINGS_EVENT notifies listeners to re-render.
  *
- * member_label is the tester-era identity (member account id or demo
- * profile id); it becomes the auth user id when real auth ships.
+ * member_label is the signed-in member's auth user id when a Supabase
+ * session exists (verified server-side by book-class via the sent JWT);
+ * otherwise the tester-era demo profile / guest labels apply.
  */
 import { supabase } from '@/lib/supabase'
 import { getMemberSession, getMemberProfile } from '@/lib/member'
@@ -75,10 +76,13 @@ function notify() {
   window.dispatchEvent(new Event(BOOKINGS_EVENT))
 }
 
-/** Tester-era identity for bookings: real account → demo profile → guest. */
+/**
+ * Identity for bookings: signed-in member account (label = auth user id,
+ * matching what book-class records server-side) → demo profile → guest.
+ */
 function memberIdentity(): { label: string; name: string } {
   const acc = getCurrentAccount()
-  if (acc) return { label: `acct-${acc.id}`, name: `${acc.firstName} ${acc.lastName}`.trim() || acc.email }
+  if (acc) return { label: acc.id, name: `${acc.firstName} ${acc.lastName}`.trim() || acc.email }
   const sess = getMemberSession()
   if (sess) return { label: `prof-${sess.memberId}`, name: getMemberProfile(sess.memberId)?.name ?? sess.memberId }
   return { label: 'guest', name: 'Guest' }
@@ -131,6 +135,10 @@ async function refreshFromCloud() {
 
 async function callFn(action: 'book' | 'cancel', classCode: string) {
   const id = memberIdentity()
+  // When a real Supabase session exists, send the JWT so book-class verifies
+  // it server-side and books under the auth user id (overrides the label).
+  const { data: sessionData } = await supabase.auth.getSession()
+  const userToken = sessionData.session?.access_token ?? ''
   const res = await fetch(FN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -140,6 +148,7 @@ async function callFn(action: 'book' | 'cancel', classCode: string) {
       class_code: classCode,
       member_label: id.label,
       member_name: id.name,
+      user_token: userToken,
     }),
   })
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>

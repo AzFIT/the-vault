@@ -1,17 +1,23 @@
 /**
- * Member accounts — local stand-in for the `users` + `user_subscriptions`
- * tables in the target schema. Signing up creates a record shaped exactly
- * like the SQL row (id, role 'member', qr_code_secret, created_at) plus a
- * subscription stub (status 'active', credits), so the Supabase migration
- * is an API swap, not a reshape.
+ * Member accounts — backed by REAL Supabase Auth.
  *
- * Passwords are stored in plain localStorage — acceptable ONLY because this
- * is a front-end mock. Real auth (hashed passwords, JWT) arrives with the
- * backend, per the schema's password_hash field.
+ * - Signup goes through the `member-auth` Edge Function, which creates the
+ *   auth user (pre-confirmed — the project has no SMTP) plus a
+ *   `member_profiles` row holding display fields and the QR secret.
+ * - Sign-in / sign-out are plain `supabase.auth` calls with the publishable
+ *   key: credentials never touch our code and sessions are real JWTs.
+ * - `getCurrentAccount()` is synchronous for first paint; it reads a small
+ *   cache that `onAuthStateChange` keeps in sync with the actual session.
+ *
+ * Demo-era local accounts do NOT migrate (the mock never stored real
+ * passwords) — members create a fresh cloud account. The QR secret and
+ * profile shape are unchanged, so the rest of the app needed no reshaping.
  */
 
+import { supabase } from '@/lib/supabase'
+
 export interface MemberAccount {
-  /** UUID-shaped id, matching the SQL type */
+  /** The auth user's id — bookings are recorded under this same id. */
   id: string
   firstName: string
   lastName: string
@@ -22,7 +28,7 @@ export interface MemberAccount {
   createdAt: string
 }
 
-/** Mirrors `user_subscriptions` for the mock. */
+/** Mirrors `user_subscriptions` — still a stub until that table ships. */
 export interface AccountSubscription {
   membershipName: string
   status: 'active' | 'past_due' | 'canceled' | 'frozen'
@@ -30,47 +36,91 @@ export interface AccountSubscription {
   creditsRemaining: number
 }
 
-const ACCOUNTS_KEY = 'vault-member-accounts'
-const SESSION_KEY = 'vault-member-account-session'
+const FN_URL = 'https://gcurvjprfwecbchreieu.supabase.co/functions/v1/member-auth'
+const BUILDER_SECRET = 'vault_bld_8f3a91c27d54e6b0'
+const CACHE_KEY = 'vault-member-account-cache'
 export const ACCOUNT_SESSION_EVENT = 'vault-member-account-session-changed'
 
 function notify() {
   window.dispatchEvent(new Event(ACCOUNT_SESSION_EVENT))
 }
 
-/* ---- helpers --------------------------------------------------------------- */
+/* ---- session cache --------------------------------------------------------- */
 
-function uuid(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
-  })
-}
+let cached: MemberAccount | null = null
+let cacheLoaded = false
 
-function qrSecret(): string {
-  const bytes = new Uint8Array(20)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-export function listAccounts(): MemberAccount[] {
+function readCache(): MemberAccount | null {
+  if (cacheLoaded) return cached
+  cacheLoaded = true
   try {
-    const raw = localStorage.getItem(ACCOUNTS_KEY)
-    return raw ? (JSON.parse(raw) as MemberAccount[]) : []
+    const raw = localStorage.getItem(CACHE_KEY)
+    cached = raw ? (JSON.parse(raw) as MemberAccount) : null
   } catch {
-    return []
+    cached = null
+  }
+  return cached
+}
+
+function writeCache(account: MemberAccount | null) {
+  cached = account
+  cacheLoaded = true
+  try {
+    if (account) localStorage.setItem(CACHE_KEY, JSON.stringify(account))
+    else localStorage.removeItem(CACHE_KEY)
+  } catch {
+    /* storage full / private mode — the in-memory cache still works */
+  }
+  notify()
+}
+
+interface ProfileRow {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+  qr_code_secret: string | null
+  created_at: string
+}
+
+function accountFromProfile(row: ProfileRow, email: string): MemberAccount {
+  return {
+    id: row.id,
+    firstName: row.first_name ?? '',
+    lastName: row.last_name ?? '',
+    email,
+    phone: row.phone ?? '',
+    role: 'member',
+    qrCodeSecret: row.qr_code_secret ?? '',
+    createdAt: row.created_at,
   }
 }
 
-function save(accounts: MemberAccount[]) {
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts))
+async function fetchProfile(userId: string, email: string): Promise<MemberAccount> {
+  const { data } = await supabase.from('member_profiles').select('*').eq('id', userId).maybeSingle()
+  if (data) return accountFromProfile(data as ProfileRow, email)
+  // Profile missing (shouldn't happen — the function inserts it atomically);
+  // synthesize a minimal account so the UI never dead-ends.
+  return {
+    id: userId,
+    firstName: '',
+    lastName: '',
+    email,
+    phone: '',
+    role: 'member',
+    qrCodeSecret: '',
+    createdAt: new Date().toISOString(),
+  }
 }
 
-export function findAccountByEmail(email: string): MemberAccount | undefined {
-  const key = email.trim().toLowerCase()
-  return listAccounts().find((a) => a.email.toLowerCase() === key)
-}
+// Keep the cache honest across tab refreshes, token refreshes and sign-out.
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (!session?.user) {
+    writeCache(null)
+    return
+  }
+  void fetchProfile(session.user.id, session.user.email ?? '').then(writeCache)
+})
 
 /* ---- signup / sign-in ------------------------------------------------------ */
 
@@ -82,59 +132,92 @@ export interface SignupInput {
   password: string
 }
 
-export function createAccount(input: SignupInput): { account?: MemberAccount; error?: string } {
+export async function createAccount(input: SignupInput): Promise<{ account?: MemberAccount; error?: string }> {
+  const firstName = input.firstName.trim()
+  const lastName = input.lastName.trim()
   const email = input.email.trim().toLowerCase()
-  if (!input.firstName.trim() || !input.lastName.trim()) return { error: 'Enter your first and last name.' }
+  const phone = input.phone.trim()
+  const password = input.password
+
+  if (!firstName || !lastName) return { error: 'Enter your first and last name.' }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Enter a valid email address.' }
-  if (input.password.length < 6) return { error: 'Password must be at least 6 characters.' }
-  if (findAccountByEmail(email)) return { error: 'An account with this email already exists — sign in instead.' }
+  if (password.length < 6) return { error: 'Password must be at least 6 characters.' }
+
+  const res = await fetch(FN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      secret: BUILDER_SECRET,
+      action: 'signup',
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      phone,
+      password,
+    }),
+  })
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok || body.error) {
+    return { error: String(body.error ?? `Signup failed (HTTP ${res.status})`) }
+  }
+
+  // Sign the fresh account in so the session exists immediately.
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+  if (signInError) return { error: `Account created but sign-in failed: ${signInError.message}` }
 
   const account: MemberAccount = {
-    id: uuid(),
-    firstName: input.firstName.trim(),
-    lastName: input.lastName.trim(),
+    id: String(body.id),
+    firstName,
+    lastName,
     email,
-    phone: input.phone.trim(),
+    phone,
     role: 'member',
-    qrCodeSecret: qrSecret(),
+    qrCodeSecret: String(body.qr_code_secret ?? ''),
     createdAt: new Date().toISOString(),
   }
-  save([...listAccounts(), account])
-  setAccountSession(account.id)
+  writeCache(account)
   return { account }
 }
 
-export function signInAccount(email: string, password: string): { account?: MemberAccount; error?: string } {
-  const account = findAccountByEmail(email)
-  // Mock: any password ≥6 chars passes for any existing account.
-  if (!account) return { error: 'No account found for this email — create one below.' }
+export async function signInAccount(email: string, password: string): Promise<{ account?: MemberAccount; error?: string }> {
   if (password.length < 6) return { error: 'Password must be at least 6 characters.' }
-  setAccountSession(account.id)
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  })
+  if (error || !data.user) {
+    return {
+      error: error?.message.toLowerCase().includes('invalid')
+        ? 'Wrong email or password — or no account exists for this email yet.'
+        : (error?.message ?? 'Sign-in failed.'),
+    }
+  }
+  const account = await fetchProfile(data.user.id, data.user.email ?? email.trim().toLowerCase())
+  writeCache(account)
   return { account }
 }
 
 /* ---- session --------------------------------------------------------------- */
 
 export function getAccountSessionId(): string | null {
-  return localStorage.getItem(SESSION_KEY)
+  return readCache()?.id ?? null
 }
 
 export function getCurrentAccount(): MemberAccount | null {
-  const id = getAccountSessionId()
-  return (id && listAccounts().find((a) => a.id === id)) || null
+  return readCache()
 }
 
-export function setAccountSession(id: string) {
-  localStorage.setItem(SESSION_KEY, id)
-  notify()
+/** Kept for API compatibility — sessions now live in Supabase Auth. */
+export function setAccountSession(_id: string) {
+  /* no-op: the auth state listener owns the cache now */
 }
 
 export function signOutAccount() {
-  localStorage.removeItem(SESSION_KEY)
-  notify()
+  writeCache(null)
+  void supabase.auth.signOut()
 }
 
-/** The mock subscription every new account starts on. */
+/** STUB until the `user_subscriptions` table ships — clearly labeled mock. */
 export function getSubscription(_account: MemberAccount): AccountSubscription {
   const end = new Date()
   end.setMonth(end.getMonth() + 1)
