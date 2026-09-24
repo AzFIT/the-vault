@@ -38,6 +38,8 @@ export interface SetRow {
   kg: number
   rpe: number
   done: boolean
+  /** Poliquin pair notation (A, A1, A2, B…) — display only, from the program builder. */
+  notation?: string
 }
 
 export interface FoodRow {
@@ -78,6 +80,10 @@ export interface VaultState {
   checklist: Record<string, boolean>
   /** today's nutrition rows (null = not yet customised) */
   foodRows: FoodRow[] | null
+  /** coach-pushed program-week sessions (synthetic keys), keyed by session key */
+  programSessionMetas: Record<string, SessionMeta>
+  /** session keys in state.programSessionMetas — replaced wholesale on each push */
+  programWeekKeys: string[]
   saveState: SaveState
 }
 
@@ -142,6 +148,8 @@ export interface SessionMeta {
   coach: string | null
   planned: boolean
   durationMin: number | null
+  /** Set when this session was pushed from the coach program builder. */
+  programWeek?: string | null
 }
 
 /** Build set-rows from a logged workout (defaults: all done). */
@@ -194,6 +202,8 @@ export function defaultSessionRows(key: string): SetRow[] {
 }
 
 export function sessionMeta(key: string): SessionMeta | null {
+  const pushed = state.programSessionMetas[key]
+  if (pushed) return pushed
   if (key === PLANNED_SESSION_KEY) {
     return {
       key,
@@ -262,6 +272,8 @@ function loadPersisted(): PersistedState {
     unlocked: {},
     checklist: {},
     foodRows: null,
+    programSessionMetas: {},
+    programWeekKeys: [],
   }
   try {
     const raw = localStorage.getItem(PERSIST_KEY)
@@ -336,6 +348,116 @@ export const vaultActions = {
 
   setSessionRows(key: string, rows: SetRow[]) {
     setState({ workoutEdits: { ...state.workoutEdits, [key]: rows } })
+  },
+
+  /**
+   * Push one program-builder week into the shared store so the Tracking
+   * Sheets → Workouts tab renders exactly what the coach designed. Replaces
+   * any previously pushed week; sessions land on synthetic dates anchored to
+   * the current week's Monday so day labels read Mon–Sun.
+   */
+  loadProgramWeek(input: {
+    programName: string
+    weekLabel: string
+    days: {
+      dayLabel: string
+      dayIdx: number
+      /** Pre-formatted marker label (Rest / Cardio / Mobility) or null. */
+      markerLabel?: string | null
+      sessions: {
+        title: string
+        exercises: {
+          name: string
+          sets: number
+          reps: number
+          kg: number
+          rpe: number
+          notation?: string
+        }[]
+      }[]
+    }[]
+  }) {
+    const workoutEdits = { ...state.workoutEdits }
+    const unlocked = { ...state.unlocked }
+    const programSessionMetas = { ...state.programSessionMetas }
+    for (const k of state.programWeekKeys) {
+      delete workoutEdits[k]
+      delete unlocked[k]
+      delete programSessionMetas[k]
+    }
+    const now = new Date()
+    const monday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - ((now.getDay() + 6) % 7),
+    )
+    const ymd = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+        d.getDate(),
+      ).padStart(2, '0')}`
+    const keys: string[] = []
+    const programWeek = `${input.programName} · ${input.weekLabel}`
+    for (const day of input.days) {
+      const date = ymd(
+        new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + day.dayIdx),
+      )
+      const sessions =
+        day.sessions.length > 0
+          ? day.sessions
+          : day.markerLabel
+            ? [{ title: day.markerLabel, exercises: [] }]
+            : []
+      sessions.forEach((sess, si) => {
+        const key = `pgw-${day.dayIdx}-${si}`
+        keys.push(key)
+        programSessionMetas[key] = {
+          key,
+          date,
+          label:
+            sess.exercises.length > 0 && day.markerLabel
+              ? `${sess.title} — ${day.markerLabel}`
+              : sess.title,
+          coach: null,
+          planned: false,
+          durationMin: null,
+          programWeek,
+        }
+        const rows: SetRow[] = []
+        let seq = 0
+        for (const e of sess.exercises) {
+          const sets = Math.min(Math.max(e.sets || 3, 1), 12)
+          for (let s = 1; s <= sets; s++) {
+            rows.push({
+              id: `${key}-ex${++seq}-s${s}`,
+              exercise: e.name,
+              set: s,
+              reps: e.reps || 0,
+              kg: e.kg || 0,
+              rpe: e.rpe || 0,
+              done: false,
+              notation: e.notation || undefined,
+            })
+          }
+        }
+        workoutEdits[key] = rows
+        // Pushed program weeks are editable without the Edit-unlock step.
+        unlocked[key] = true
+      })
+    }
+    setState({ workoutEdits, unlocked, programSessionMetas, programWeekKeys: keys })
+  },
+
+  /** Remove the pushed program week from the Workouts tab. */
+  clearProgramWeek() {
+    const workoutEdits = { ...state.workoutEdits }
+    const unlocked = { ...state.unlocked }
+    const programSessionMetas = { ...state.programSessionMetas }
+    for (const k of state.programWeekKeys) {
+      delete workoutEdits[k]
+      delete unlocked[k]
+      delete programSessionMetas[k]
+    }
+    setState({ workoutEdits, unlocked, programSessionMetas, programWeekKeys: [] })
   },
 
   updateSetRow(key: string, id: string, patch: Partial<SetRow>) {

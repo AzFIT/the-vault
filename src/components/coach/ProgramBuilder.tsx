@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router'
 import { coachClients, programs } from '@/data/mock'
 import type { Client } from '@/data/mock'
 import { loadExerciseLibrary } from '@/lib/exerciseLibrary'
@@ -169,6 +170,24 @@ function makeCustomDraft(n: number): ProgramDraft {
 
 const cloneWeek = (w: Week): Week => JSON.parse(JSON.stringify(w))
 
+/**
+ * Notation rides along in the exercise `notes` column as JSON
+ * ({"notation":"A1"}) so no schema change is needed; tempo/%1RM-style seed
+ * notes pass through untouched.
+ */
+const notationToNotes = (notation?: string): string | null =>
+  notation ? JSON.stringify({ notation }) : null
+
+const notationFromNotes = (notes: string | null | undefined): string | undefined => {
+  if (!notes) return undefined
+  try {
+    const j = JSON.parse(notes) as { notation?: unknown }
+    return typeof j?.notation === 'string' && j.notation ? j.notation : undefined
+  } catch {
+    return undefined
+  }
+}
+
 interface Sel {
   weekIdx: number
   dayIdx: number
@@ -208,6 +227,9 @@ export default function ProgramBuilder({
   const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
   const [genOpen, setGenOpen] = useState(false)
   const [fullView, setFullView] = useState(false)
+  /** Client awaiting assign confirmation (checkbox intercepted). */
+  const [assignPending, setAssignPending] = useState<ClientSummary | null>(null)
+  const navigate = useNavigate()
   /** Exercise-name → coaching cue, from the seeded library (loaded once). */
   const [cues, setCues] = useState<Map<string, string> | null>(null)
   useEffect(() => {
@@ -394,6 +416,7 @@ export default function ProgramBuilder({
           kg: 0,
           rpe: 7,
           rest: e.rest_seconds ?? null,
+          notation: notationFromNotes(e.notes),
         })),
     }))
     const cloneForWeek = (): Week => ({
@@ -655,7 +678,7 @@ export default function ProgramBuilder({
             reps: String(x.reps),
             rest_seconds: x.rest ?? null,
             order_index: i + 1,
-            notes: null,
+            notes: notationToNotes(x.notation),
           })),
         })
       }),
@@ -760,6 +783,36 @@ export default function ProgramBuilder({
     () => coachClients.filter((c) => effectiveProgramId(c, overrides) === selectedId),
     [overrides, selectedId],
   )
+
+  /** Push one week of the current draft into the shared sheets store and open it. */
+  const openWeekInSheets = (wi: number) => {
+    const week = draft.weeks[wi]
+    if (!week) return
+    vaultActions.loadProgramWeek({
+      programName: draft.name,
+      weekLabel: `Week ${wi + 1}`,
+      days: week.days.map((day, dayIdx) => ({
+        dayLabel: day.label,
+        dayIdx,
+        markerLabel: day.marker ? MARKER_LABELS[day.marker] : null,
+        sessions: day.sessions.map((sess) => ({
+          title: sess.title,
+          exercises: sess.exercises.map((x) => ({
+            name: x.exercise,
+            sets: x.sets,
+            reps: x.reps,
+            kg: x.kg,
+            rpe: x.rpe,
+            notation: x.notation,
+          })),
+        })),
+      })),
+    })
+    setFullView(false)
+    setWeekView(null)
+    navigate('/sheets?tab=workouts')
+    toast.success(`Week ${wi + 1} sent to Tracking Sheets — Workouts tab`)
+  }
 
   /** Full stacked plan for one week — every day, every session, every exercise. */
   const renderWeekStack = (wi: number, onPickSession?: (s: Sel) => void) => {
@@ -1321,7 +1374,13 @@ export default function ProgramBuilder({
                                 <input
                                   type="checkbox"
                                   checked={checked}
-                                  onChange={() => toggleAssign(c)}
+                                  onChange={() => {
+                                    if (checked) {
+                                      toggleAssign(c)
+                                    } else {
+                                      setAssignPending(c)
+                                    }
+                                  }}
                                   className="h-3.5 w-3.5 accent-white"
                                 />
                                 <span className="flex-1 truncate">{c.full_name}</span>
@@ -1351,13 +1410,22 @@ export default function ProgramBuilder({
                 <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
                   Week detail
                 </p>
-                <button
-                  onClick={() => setWeekView(null)}
-                  aria-label="Clear week view"
-                  className="text-vault-faint hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openWeekInSheets(weekView)}
+                    title={`Send Week ${weekView + 1} to the Tracking Sheets workouts tab`}
+                    className="inline-flex items-center gap-1.5 border border-vault-gold/50 px-2 py-1 text-[9px] uppercase tracking-[0.1em] text-vault-gold transition-colors hover:bg-vault-gold/10"
+                  >
+                    <FileSpreadsheet className="h-3 w-3" /> Open in Sheets
+                  </button>
+                  <button
+                    onClick={() => setWeekView(null)}
+                    aria-label="Clear week view"
+                    className="text-vault-faint hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <div className="max-h-[480px] overflow-y-auto pr-1">
                 {renderWeekStack(weekView, (s) => {
@@ -1406,6 +1474,14 @@ export default function ProgramBuilder({
           <div className="flex min-h-0 flex-1 gap-5">
             <div className="min-w-0 flex-1">{renderCalendar(true)}</div>
             <div className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-vault-border pl-5 lg:block">
+              {!sel && weekView !== null && (
+                <button
+                  onClick={() => openWeekInSheets(weekView)}
+                  className="mb-3 inline-flex w-full items-center justify-center gap-1.5 border border-vault-gold/50 px-2 py-1.5 text-[10px] uppercase tracking-[0.1em] text-vault-gold transition-colors hover:bg-vault-gold/10"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> Open Week {weekView + 1} in Sheets
+                </button>
+              )}
               {sel && selectedSession ? (
                 <div>
                   <div className="mb-3 flex items-center justify-between">
@@ -1464,6 +1540,39 @@ export default function ProgramBuilder({
               />
             </div>
           )}
+        </div>
+      )}
+
+      {/* Assign confirmation — this becomes the client's current program */}
+      {assignPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm border border-vault-border bg-vault-surface p-5">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+              Send program
+            </p>
+            <p className="mt-2 text-[13px] leading-relaxed text-white">
+              Send “{dbPrograms?.find((p) => `db-${p.id}` === selectedId)?.name}” to{' '}
+              <span className="font-medium">{assignPending.full_name}</span>? This becomes the
+              current program they see from their end.
+            </p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setAssignPending(null)}
+                className="border border-vault-border px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] text-vault-muted transition-colors hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toggleAssign(assignPending)
+                  setAssignPending(null)
+                }}
+                className="border border-vault-gold/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] text-vault-gold transition-colors hover:bg-vault-gold/10"
+              >
+                Confirm & send
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

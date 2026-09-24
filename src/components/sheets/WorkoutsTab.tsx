@@ -58,7 +58,12 @@ function PlanView({
         return (
           <div key={g.name}>
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[14px] font-medium">{g.name}</p>
+              <p className="min-w-0 truncate text-[14px] font-medium" title={g.name}>
+                {g.rows[0].notation && (
+                  <span className="mr-1.5 text-vault-gold">{g.rows[0].notation}</span>
+                )}
+                {g.name}
+              </p>
               <p className="text-[12px] text-vault-muted tabular-nums">
                 {g.rows.length}×{reps}
                 {kg > 0 ? ` @ ${kg}kg` : ''}
@@ -136,19 +141,22 @@ function SessionPanel({
   }, [flash])
 
   // Google Sheets-style exercise grouping: consecutive rows of the same
-  // exercise sit behind one name cell with a small +/− toggle. Collapsed
-  // groups render only their last row ("Sandbag Lunge · Set 4 …").
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  // exercise sit behind one name cell with a small +/− toggle. Groups start
+  // COLLAPSED: the visible row is the group's first row, summarised as
+  // "total sets ×reps @ kg"; expanding (−) reveals every set in sequence.
   const groups: { name: string; start: number; count: number }[] = []
   rows.forEach((row, i) => {
     const last = groups[groups.length - 1]
     if (last && last.name === row.exercise) last.count += 1
     else groups.push({ name: row.exercise, start: i, count: 1 })
   })
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
+    () => new Set(groups.map((g) => g.name)),
+  )
   const groupAt = (i: number) => groups.find((g) => i >= g.start && i < g.start + g.count)!
   const isHidden = (i: number) => {
     const g = groupAt(i)
-    return collapsed.has(g.name) && i !== g.start + g.count - 1
+    return collapsed.has(g.name) && i !== g.start
   }
 
   const ctl = useSheetGrid(rows.length, 6, (r, c) => {
@@ -331,29 +339,36 @@ function SessionPanel({
                         onSelect={(name) => update(row, { exercise: name })}
                         placeholder="Search exercises…"
                         trailer={
-                          g.count > 1 ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                toggleGroup(g.name)
-                              }}
-                              aria-expanded={!gCollapsed}
-                              aria-label={
-                                gCollapsed
-                                  ? `Show all ${g.count} sets of ${g.name}`
-                                  : `Collapse ${g.name} to one row`
-                              }
-                              title={gCollapsed ? `Show all ${g.count} sets` : 'Collapse group'}
-                              className="flex h-4 w-4 shrink-0 items-center justify-center border border-vault-border text-vault-muted transition-colors hover:border-white hover:text-white"
-                            >
-                              {gCollapsed ? <Plus className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
-                            </button>
-                          ) : undefined
+                          <>
+                            {row.notation && (
+                              <span className="shrink-0 border border-vault-gold/50 px-1 text-[9px] uppercase tracking-[0.08em] text-vault-gold">
+                                {row.notation}
+                              </span>
+                            )}
+                            {g.count > 1 ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleGroup(g.name)
+                                }}
+                                aria-expanded={!gCollapsed}
+                                aria-label={
+                                  gCollapsed
+                                    ? `Show all ${g.count} sets of ${g.name}`
+                                    : `Collapse ${g.name} to one row`
+                                }
+                                title={gCollapsed ? `Show all ${g.count} sets` : 'Collapse group'}
+                                className="flex h-4 w-4 shrink-0 items-center justify-center border border-vault-border text-vault-muted transition-colors hover:border-white hover:text-white"
+                              >
+                                {gCollapsed ? <Plus className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                              </button>
+                            ) : undefined}
+                          </>
                         }
                       />
                       <td className="h-11 border border-vault-border/60 px-3 text-center text-[13px] text-vault-muted tabular-nums">
-                        {row.set}
+                        {gCollapsed ? g.count : row.set}
                       </td>
                       <EditableCell
                         ctl={ctl} r={r} c={2}
@@ -445,6 +460,13 @@ export default function WorkoutsTab({
     if (planned) metas.push(planned)
   }
 
+  // Program-week sessions pushed from the coach builder ("Open in Sheets").
+  // Always rendered — independent of the mock week navigator — so the coach's
+  // current design stays visible until replaced by a newer push.
+  const programMetas = Object.values(vault.programSessionMetas).sort((a, b) =>
+    a.date === b.date ? a.key.localeCompare(b.key) : a.date < b.date ? -1 : 1,
+  )
+
   // All session panels start collapsed — the coach expands the day they need.
   const [openKey, setOpenKey] = useState<string | null>(null)
   // Each SessionPanel registers its own add-set handler here so the toolbar
@@ -480,7 +502,32 @@ export default function WorkoutsTab({
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <div className="min-w-0 flex-1 space-y-4">
-        {metas.length === 0 && (
+        {programMetas.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 border border-vault-gold/40 bg-vault-gold/5 px-4 py-2.5">
+              <p className="min-w-0 truncate text-[10px] uppercase tracking-[0.16em] text-vault-gold">
+                Program · {programMetas[0].programWeek}
+              </p>
+              <button
+                type="button"
+                onClick={() => vaultActions.clearProgramWeek()}
+                className="shrink-0 text-[10px] uppercase tracking-[0.1em] text-vault-muted transition-colors hover:text-white"
+              >
+                Clear
+              </button>
+            </div>
+            {programMetas.map((m) => (
+              <SessionPanel
+                key={m.key}
+                meta={m}
+                open={openKey === m.key}
+                onToggle={() => setOpenKey(openKey === m.key ? null : m.key)}
+                addSetHandlers={addSetHandlers}
+              />
+            ))}
+          </div>
+        )}
+        {metas.length === 0 && programMetas.length === 0 && (
           <div className="app-card p-8 text-center text-[14px] text-vault-muted">
             No sessions logged this week.
           </div>

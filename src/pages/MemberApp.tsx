@@ -19,11 +19,18 @@ import {
   Crown,
   Home,
   Lock,
+  PartyPopper,
   ScanLine,
+  ShieldCheck,
   User,
 } from 'lucide-react'
 import { asset } from '@/lib/utils'
 import { requestVaultEntry } from '@/lib/vaultEntry'
+import {
+  getFrontdeskProfile,
+  signMemberWaiver,
+  type FrontdeskProfile,
+} from '@/lib/memberAdmin'
 import {
   createAccount,
   getCurrentAccount,
@@ -217,6 +224,40 @@ export default function MemberApp() {
   }, [])
   void bookTick
 
+  /* ---- cloud profile (waiver / payment / birthday / bookings) -------------- */
+  const [cloud, setCloud] = useState<FrontdeskProfile | null>(null)
+  const [cloudState, setCloudState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [signingWaiver, setSigningWaiver] = useState(false)
+  useEffect(() => {
+    if (!account) return
+    let live = true
+    setCloudState('loading')
+    getFrontdeskProfile(account.id)
+      .then((p) => {
+        if (!live) return
+        setCloud(p)
+        setCloudState('ready')
+      })
+      .catch(() => {
+        if (live) setCloudState('error')
+      })
+    return () => {
+      live = false
+    }
+  }, [account])
+  const signWaiver = async () => {
+    if (!account || signingWaiver) return
+    setSigningWaiver(true)
+    try {
+      const at = await signMemberWaiver(account.id)
+      setCloud((c) => (c ? { ...c, profile: { ...c.profile, waiver_signed_at: at } } : c))
+    } catch {
+      /* surfaced by the button simply re-enabling — the desk can also sign */
+    } finally {
+      setSigningWaiver(false)
+    }
+  }
+
   if (!account) {
     return (
       <div className="app-black grid min-h-[100dvh] bg-vault-bg text-white lg:grid-cols-2" style={{ background: '#141518' }}>
@@ -406,6 +447,21 @@ export default function MemberApp() {
           {tab === 'profile' && (
             <div>
               <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>Profile</h2>
+
+              {/* Birthday treat — surfaces on the member's day */}
+              {cloud?.birthday_today && (
+                <div className="mt-4 flex items-start gap-3 border border-gold/60 bg-gold/10 p-4">
+                  <PartyPopper className="mt-0.5 h-5 w-5 shrink-0 text-gold" />
+                  <div>
+                    <p className="text-[14px] font-bold text-gold">Happy birthday, {account.firstName}!</p>
+                    <p className="mt-0.5 text-[12px] leading-relaxed text-vault-muted">
+                      Everyone at The Vault wishes you a strong year ahead. Show this screen at the
+                      front desk today for a birthday treat.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 border border-vault-border bg-vault-surface/50 p-5">
                 <div className="flex items-center gap-4">
                   <span className="flex h-14 w-14 items-center justify-center rounded-full border border-gold/50 bg-gold/10 text-[16px] text-gold">
@@ -429,6 +485,99 @@ export default function MemberApp() {
                 >
                   <Lock className="h-4 w-4" /> Lock out
                 </button>
+              </div>
+
+              {/* Account status — waiver, payments, renewal, recent bookings */}
+              <div className="mt-4 border border-vault-border bg-vault-surface/50 p-5">
+                <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-vault-faint">
+                  <ShieldCheck className="h-3.5 w-3.5 text-gold" /> Account status
+                </p>
+                {cloudState === 'loading' && (
+                  <p className="mt-3 text-[12px] text-vault-muted">Loading your account…</p>
+                )}
+                {cloudState === 'error' && (
+                  <p className="mt-3 text-[12px] leading-relaxed text-vault-muted">
+                    Account details aren't available yet — ask the front desk to link your member
+                    profile to this login.
+                  </p>
+                )}
+                {cloud && (
+                  <>
+                    <dl className="mt-3 space-y-2.5 text-[12px]">
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-vault-muted">Waiver</dt>
+                        <dd className={cloud.profile.waiver_signed_at ? 'text-emerald-300' : 'text-gold'}>
+                          {cloud.profile.waiver_signed_at
+                            ? `Signed ${new Date(cloud.profile.waiver_signed_at).toLocaleDateString()}`
+                            : 'Not signed'}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-vault-muted">Payments</dt>
+                        <dd className={
+                          cloud.payment.state === 'up_to_date'
+                            ? 'text-emerald-300'
+                            : cloud.payment.state === 'past_due'
+                              ? 'text-red-300'
+                              : 'text-white'
+                        }>
+                          {cloud.payment.state === 'up_to_date'
+                            ? 'Up to date'
+                            : cloud.payment.state === 'past_due'
+                              ? 'Past due — see front desk'
+                              : cloud.payment.state === 'canceled'
+                                ? 'Canceled'
+                                : 'No plan yet'}
+                        </dd>
+                      </div>
+                      {cloud.payment.current_period_end && (
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-vault-muted">Renews</dt>
+                          <dd className="text-white">
+                            {new Date(cloud.payment.current_period_end).toLocaleDateString()}
+                          </dd>
+                        </div>
+                      )}
+                      {cloud.payment.credits_remaining !== null && (
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-vault-muted">Class credits</dt>
+                          <dd className="tnum text-white">{cloud.payment.credits_remaining}</dd>
+                        </div>
+                      )}
+                    </dl>
+                    {cloud.payment.state === 'past_due' && (
+                      <p className="mt-3 border border-red-400/40 bg-red-400/10 px-3 py-2 text-[11px] leading-snug text-red-200">
+                        Your payment is past due — please settle it at the front desk to keep
+                        booking classes.
+                      </p>
+                    )}
+                    {!cloud.profile.waiver_signed_at && (
+                      <button
+                        type="button"
+                        onClick={signWaiver}
+                        disabled={signingWaiver}
+                        className="mt-4 w-full border border-gold/60 px-4 py-2.5 text-[11px] uppercase tracking-[0.12em] text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+                      >
+                        {signingWaiver ? 'Signing…' : 'Sign waiver now'}
+                      </button>
+                    )}
+                    {cloud.bookings.length > 0 && (
+                      <div className="mt-4 border-t border-vault-border pt-3">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-vault-faint">Recent bookings</p>
+                        <div className="mt-2 space-y-1.5">
+                          {cloud.bookings.slice(0, 5).map((b) => (
+                            <div key={b.id} className="flex items-center justify-between gap-3 text-[12px]">
+                              <span className="min-w-0 truncate text-white">{b.class_name}</span>
+                              <span className="shrink-0 text-vault-muted">
+                                {[b.day_of_week, b.time_label].filter(Boolean).join(' · ')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Plan catalog — public read; switching plans lands with the front desk for now */}

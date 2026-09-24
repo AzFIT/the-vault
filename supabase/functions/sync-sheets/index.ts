@@ -174,7 +174,41 @@ async function gfetch(token: string, path: string, init?: RequestInit): Promise<
 // Sheet layout helpers
 // ---------------------------------------------------------------------------
 
-const HEADERS = ['Exercise', 'Sets', 'Reps', 'Rest (s)', 'Notes']
+const HEADERS = ['Pair', 'Exercise', 'Sets', 'Reps', 'Rest (s)', 'Notes']
+
+/** Split {"notation":"A1"} out of a notes JSON blob; passes plain text through. */
+function splitNotation(notes: string | null): { notation: string | null; rest: string | null } {
+  if (!notes) return { notation: null, rest: null }
+  try {
+    const j = JSON.parse(notes) as Record<string, unknown>
+    if (j && typeof j === 'object' && typeof j.notation === 'string' && j.notation) {
+      const { notation: _n, ...others } = j
+      void _n
+      const restKeys = Object.keys(others)
+      return { notation: j.notation, rest: restKeys.length ? JSON.stringify(others) : null }
+    }
+  } catch {
+    /* plain-text notes */
+  }
+  return { notation: null, rest: notes }
+}
+
+/** Reverse of splitNotation — keep the Pair value inside the notes column. */
+function joinNotation(notation: string | null, notes: string | null): string | null {
+  if (notation) {
+    const { rest } = splitNotation(notes)
+    const merged: Record<string, unknown> = { notation }
+    if (rest) {
+      try {
+        Object.assign(merged, JSON.parse(rest) as Record<string, unknown>)
+      } catch {
+        merged.notes = rest
+      }
+    }
+    return JSON.stringify(merged)
+  }
+  return notes
+}
 
 /** Strip characters Google forbids in tab titles; dedupe against taken set. */
 function cleanTabTitle(name: string, taken: Set<string>): string {
@@ -198,6 +232,8 @@ interface SheetExercise {
   reps: string | null
   rest_seconds: number | null
   notes: string | null
+  /** Poliquin pair notation (A, A1, A2, B…) — its own sheet column. */
+  notation: string | null
 }
 interface SheetWorkout {
   name: string
@@ -209,6 +245,7 @@ function workoutValues(w: SheetWorkout): string[][] {
   return [
     HEADERS,
     ...w.exercises.map((e) => [
+      e.notation ?? '',
       e.name,
       e.sets != null ? String(e.sets) : '',
       e.reps ?? '',
@@ -266,13 +303,17 @@ async function fetchProgram(
     out.push({
       name: String(w.name ?? 'Session'),
       notes: (w.notes as string | null) ?? null,
-      exercises: ((exs ?? []) as Record<string, unknown>[]).map((e) => ({
-        name: String(e.name ?? ''),
-        sets: (e.sets as number | null) ?? null,
-        reps: e.reps != null ? String(e.reps) : null,
-        rest_seconds: (e.rest_seconds as number | null) ?? null,
-        notes: (e.notes as string | null) ?? null,
-      })),
+      exercises: ((exs ?? []) as Record<string, unknown>[]).map((e) => {
+        const { notation, rest } = splitNotation((e.notes as string | null) ?? null)
+        return {
+          name: String(e.name ?? ''),
+          sets: (e.sets as number | null) ?? null,
+          reps: e.reps != null ? String(e.reps) : null,
+          rest_seconds: (e.rest_seconds as number | null) ?? null,
+          notes: rest,
+          notation,
+        }
+      }),
     })
   }
 
@@ -319,7 +360,7 @@ async function replaceContent(
         reps: e.reps,
         rest_seconds: e.rest_seconds,
         order_index: i + 1,
-        notes: e.notes,
+        notes: joinNotation(e.notation ?? null, e.notes),
       }))
       .filter((r) => r.name)
     if (rows.length) {
@@ -398,25 +439,33 @@ async function resetSpreadsheetTabs(
   })
 }
 
-/** Parse one tab's values back into a workout. Returns null if no data rows. */
+/** Parse one tab's values back into a workout. Returns null if no data rows.
+ *  Handles both the current layout (Pair | Exercise | Sets | Reps | Rest | Notes)
+ *  and the legacy one (Exercise | Sets | Reps | Rest | Notes). */
 function parseTab(title: string, values: string[][] | undefined): SheetWorkout | null {
   if (!values) return null
   const headerIdx = values.findIndex(
-    (r) => (r[0] ?? '').trim().toLowerCase() === 'exercise',
+    (r) => (r[0] ?? '').trim().toLowerCase() === 'exercise' || (r[0] ?? '').trim().toLowerCase() === 'pair',
   )
   if (headerIdx === -1) return null
+  const hasPair = (values[headerIdx][0] ?? '').trim().toLowerCase() === 'pair'
+  const col = hasPair
+    ? { pair: 0, name: 1, sets: 2, reps: 3, rest: 4, notes: 5 }
+    : { pair: -1, name: 0, sets: 1, reps: 2, rest: 3, notes: 4 }
+  const cell = (row: string[], i: number) => (i >= 0 ? ((row[i] ?? '').trim()) : '')
   const exercises: SheetExercise[] = []
   for (const row of values.slice(headerIdx + 1)) {
-    const name = (row[0] ?? '').trim()
+    const name = cell(row, col.name)
     if (!name) break // blank row ends the table
-    const sets = parseInt(row[1] ?? '', 10)
-    const rest = parseInt(row[3] ?? '', 10)
+    const sets = parseInt(cell(row, col.sets), 10)
+    const rest = parseInt(cell(row, col.rest), 10)
     exercises.push({
       name,
       sets: Number.isFinite(sets) ? sets : null,
-      reps: (row[2] ?? '').trim() || null,
+      reps: cell(row, col.reps) || null,
       rest_seconds: Number.isFinite(rest) ? rest : null,
-      notes: (row[4] ?? '').trim() || null,
+      notes: cell(row, col.notes) || null,
+      notation: cell(row, col.pair) || null,
     })
     if (exercises.length >= 300) break
   }
@@ -1143,7 +1192,7 @@ Deno.serve(async (req: Request) => {
         .filter((t) => t !== 'SUMMARY')
       if (!titles.length) return json({ error: 'sheet has no session tabs to import' }, 400)
 
-      const ranges = titles.map((t) => `'${t.replace(/'/g, "''")}'!A1:E500`)
+      const ranges = titles.map((t) => `'${t.replace(/'/g, "''")}'!A1:F500`)
       const qs = ranges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&')
       const batch = await gfetch(
         token,
@@ -1157,7 +1206,7 @@ Deno.serve(async (req: Request) => {
         if (w) parsed.push(w)
       }
       if (!parsed.length) {
-        return json({ error: 'no exercise rows found in the sheet (expected Exercise/Sets/Reps/Rest/Notes headers)' }, 400)
+        return json({ error: 'no exercise rows found in the sheet (expected Pair/Exercise/Sets/Reps/Rest/Notes headers)' }, 400)
       }
       const counts = await replaceContent(supabase, programId, parsed)
       await supabase
