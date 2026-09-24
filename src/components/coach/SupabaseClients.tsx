@@ -3,12 +3,15 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Activity as ActivityIcon,
   CalendarDays,
+  Camera,
   CheckCircle2,
   Dumbbell,
+  Flag,
   Loader2,
   Mail,
   RefreshCw,
   Search,
+  ShieldAlert,
   UserRound,
   Users,
   X,
@@ -16,9 +19,13 @@ import {
 import {
   loadClientDetail,
   loadClientsFromSupabase,
+  flagClient,
+  updateClientFlag,
+  uploadClientPhoto,
 } from '@/lib/programSave'
 import type {
   ClientDetailResult,
+  ClientFlag,
   ClientProgramSummary,
   ClientSummary,
 } from '@/lib/programSave'
@@ -54,14 +61,29 @@ function DashboardDrawer({
   result,
   loading,
   error,
+  photoBusy,
+  flagBusy,
+  notice,
+  onPhoto,
+  onFlag,
+  onUpdateFlag,
   onClose,
 }: {
   result: ClientDetailResult | null
   loading: boolean
   error: string | null
+  photoBusy: boolean
+  flagBusy: boolean
+  notice: string | null
+  onPhoto: (file: File) => void
+  onFlag: (reason: string) => void
+  onUpdateFlag: (flagId: string, status: ClientFlag['status']) => void
   onClose: () => void
 }) {
   const c = result?.client
+  const [flagOpen, setFlagOpen] = useState(false)
+  const [flagReason, setFlagReason] = useState('')
+  const fileRef = { current: null as HTMLInputElement | null }
   return (
     <AnimatePresence>
       {(result || loading || error) && (
@@ -103,8 +125,12 @@ function DashboardDrawer({
                 <div className="space-y-5">
                   {/* identity */}
                   <div className="flex items-center gap-3">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-gold/10 font-serif text-gold">
-                      {initialsOf(c.full_name)}
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gold/50 bg-gold/10 font-serif text-gold">
+                      {c.photo_url ? (
+                        <img src={c.photo_url} alt={c.full_name} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-lg">{initialsOf(c.full_name)}</span>
+                      )}
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-[16px] font-medium text-white">{c.full_name}</p>
@@ -121,6 +147,90 @@ function DashboardDrawer({
                     >
                       {c.status ?? 'unknown'}
                     </span>
+                  </div>
+
+                  {/* photo + fraud flag actions */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={(el) => { fileRef.current = el }}
+                      type="file"
+                      accept="image/*"
+                      capture="user"
+                      aria-label="Client photo file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (f) onPhoto(f)
+                        e.target.value = ''
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={photoBusy}
+                      className="flex items-center gap-1.5 border border-vault-border px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-vault-muted transition-colors hover:border-gold/50 hover:text-vault-gold disabled:opacity-50"
+                    >
+                      {photoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                      {c.photo_url ? 'Replace photo' : 'Add face photo'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlagOpen((o) => !o)}
+                      disabled={flagBusy}
+                      className={`flex items-center gap-1.5 border px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] transition-colors disabled:opacity-50 ${
+                        flagOpen
+                          ? 'border-red-500/60 bg-red-500/10 text-red-300'
+                          : 'border-red-500/40 text-red-300 hover:bg-red-500/10'
+                      }`}
+                    >
+                      <ShieldAlert className="h-3 w-3" />
+                      Flag member
+                    </button>
+                    <p className="w-full text-[9px] leading-snug text-vault-faint">
+                      Photo is optional — used to verify the person checking in. Flagging is discreet:
+                      no confrontation, management reviews it from the flags list.
+                    </p>
+                    {notice && (
+                      <p className="w-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] text-emerald-300">
+                        {notice}
+                      </p>
+                    )}
+                    {flagOpen && (
+                      <div className="w-full space-y-2 border border-red-500/40 bg-red-500/[0.06] p-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-red-300">
+                          Fraud / identity flag
+                        </p>
+                        <textarea
+                          value={flagReason}
+                          onChange={(e) => setFlagReason(e.target.value)}
+                          rows={2}
+                          placeholder="What happened? e.g. Face didn't match the photo at check-in…"
+                          aria-label="Flag reason"
+                          className="w-full border border-vault-border bg-vault-bg px-2 py-1.5 text-[12px] text-white placeholder:text-vault-faint focus:border-red-500/50 focus:outline-none"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={flagBusy || !flagReason.trim()}
+                            onClick={() => {
+                              onFlag(flagReason.trim())
+                              setFlagReason('')
+                              setFlagOpen(false)
+                            }}
+                            className="bg-red-600 px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+                          >
+                            {flagBusy ? 'Raising…' : 'Raise flag quietly'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFlagOpen(false)}
+                            className="border border-vault-border px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-vault-muted hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* stats */}
@@ -152,6 +262,9 @@ function DashboardDrawer({
 
                   {/* training activity — member check-ins */}
                   <ActivitySection result={result} />
+
+                  {/* fraud flags — raised discreetly by staff, reviewed by management */}
+                  <FlagsSection flags={result.flags} onUpdate={onUpdateFlag} />
 
                   {/* programs */}
                   <section>
@@ -332,6 +445,75 @@ function ActivitySection({ result }: { result: ClientDetailResult }) {
   )
 }
 
+/* ---- fraud flags ------------------------------------------------------------ */
+
+const FLAG_STATUS_STYLE: Record<ClientFlag['status'], string> = {
+  open: 'border-red-500/50 bg-red-500/10 text-red-300',
+  reviewing: 'border-amber-500/50 bg-amber-500/10 text-amber-300',
+  resolved: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300',
+}
+
+function FlagsSection({
+  flags,
+  onUpdate,
+}: {
+  flags: ClientFlag[]
+  onUpdate: (flagId: string, status: ClientFlag['status']) => void
+}) {
+  return (
+    <section>
+      <p className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-vault-muted">
+        <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+        Fraud flags · <span className="tnum">{flags.length}</span>
+      </p>
+      {flags.length === 0 ? (
+        <p className="border border-dashed border-vault-border px-3 py-3 text-[11px] text-vault-faint">
+          No flags on this client.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {flags.map((f) => (
+            <div key={f.id} className="border border-vault-border bg-vault-surface/40 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className={`border px-1.5 py-px text-[8px] uppercase tracking-[0.1em] ${FLAG_STATUS_STYLE[f.status]}`}>
+                  {f.status}
+                </span>
+                <p className="tnum text-[10px] text-vault-faint">
+                  {new Date(f.created_at).toLocaleString()} · by {f.flagged_by}
+                </p>
+              </div>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-white">{f.reason}</p>
+              {f.resolution_notes && (
+                <p className="mt-1 text-[11px] text-vault-muted">Resolution: {f.resolution_notes}</p>
+              )}
+              {f.status !== 'resolved' && (
+                <div className="mt-2 flex gap-2">
+                  {f.status === 'open' && (
+                    <button
+                      type="button"
+                      onClick={() => onUpdate(f.id, 'reviewing')}
+                      className="border border-amber-500/50 px-2.5 py-1 text-[9px] uppercase tracking-[0.1em] text-amber-300 transition-colors hover:bg-amber-500/10"
+                    >
+                      Mark reviewing
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onUpdate(f.id, 'resolved')}
+                    className="border border-emerald-500/50 px-2.5 py-1 text-[9px] uppercase tracking-[0.1em] text-emerald-300 transition-colors hover:bg-emerald-500/10"
+                  >
+                    Resolve
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function ProgramCard({ program: p }: { program: ClientProgramSummary }) {  const [open, setOpen] = useState(false)
   const exCount = p.workouts.reduce((n, w) => n + w.exercises.length, 0)
   return (
@@ -391,6 +573,9 @@ export default function SupabaseClients() {
   const [detail, setDetail] = useState<ClientDetailResult | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [flagBusy, setFlagBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -401,6 +586,12 @@ export default function SupabaseClients() {
       .finally(() => setLoading(false))
   }
   useEffect(load, [])
+
+  const refreshDetail = (clientId: string) => {
+    loadClientDetail(clientId)
+      .then(setDetail)
+      .catch((e: unknown) => setDetailError(e instanceof Error ? e.message : String(e)))
+  }
 
   const filtered = useMemo(() => {
     if (!clients) return []
@@ -415,11 +606,73 @@ export default function SupabaseClients() {
     setDrawer({ clientId })
     setDetail(null)
     setDetailError(null)
+    setNotice(null)
     setDetailLoading(true)
     loadClientDetail(clientId)
       .then(setDetail)
       .catch((e: unknown) => setDetailError(e instanceof Error ? e.message : String(e)))
       .finally(() => setDetailLoading(false))
+  }
+
+  /** Downscale to a small JPEG client-side, then ship it to the photos bucket. */
+  const handlePhoto = (file: File) => {
+    if (!drawer || photoBusy) return
+    setPhotoBusy(true)
+    setNotice(null)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const size = 256
+        const canvas = document.createElement('canvas')
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          setPhotoBusy(false)
+          return
+        }
+        const scale = Math.max(size / img.width, size / img.height)
+        const w = img.width * scale
+        const h = img.height * scale
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+        uploadClientPhoto(drawer.clientId, dataUrl)
+          .then(() => {
+            setNotice('Photo updated — it shows at check-in and on this profile.')
+            refreshDetail(drawer.clientId)
+            load()
+          })
+          .catch((e: unknown) => setNotice(`Photo upload failed: ${e instanceof Error ? e.message : e}`))
+          .finally(() => setPhotoBusy(false))
+      }
+      img.onerror = () => setPhotoBusy(false)
+      img.src = String(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleFlag = (reason: string) => {
+    if (!drawer || flagBusy) return
+    setFlagBusy(true)
+    setNotice(null)
+    flagClient(drawer.clientId, reason, 'Coach portal staff')
+      .then(() => {
+        setNotice('Flag raised quietly — management has been notified to review.')
+        refreshDetail(drawer.clientId)
+        load()
+      })
+      .catch((e: unknown) => setNotice(`Flag failed: ${e instanceof Error ? e.message : e}`))
+      .finally(() => setFlagBusy(false))
+  }
+
+  const handleUpdateFlag = (flagId: string, status: ClientFlag['status']) => {
+    updateClientFlag(flagId, status)
+      .then(() => {
+        if (drawer) refreshDetail(drawer.clientId)
+        load()
+      })
+      .catch(() => setNotice('Flag update failed — try again.'))
   }
 
   return (
@@ -469,11 +722,26 @@ export default function SupabaseClients() {
               onClick={() => openDashboard(c.id)}
               className="group flex items-center gap-3 border border-vault-border px-3 py-2.5 text-left transition-colors hover:border-vault-surface-3 hover:bg-vault-surface-2/50"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-vault-border bg-vault-surface-2 font-serif text-[11px] text-vault-muted transition-colors group-hover:border-gold/50 group-hover:text-vault-gold">
-                {initialsOf(c.full_name)}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-vault-border bg-vault-surface-2 font-serif text-[11px] text-vault-muted transition-colors group-hover:border-gold/50 group-hover:text-vault-gold">
+                {c.photo_url ? (
+                  <img src={c.photo_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initialsOf(c.full_name)
+                )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] text-white">{c.full_name}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-[13px] text-white">{c.full_name}</span>
+                  {(c.open_flags ?? 0) > 0 && (
+                    <span
+                      title={`${c.open_flags} open fraud flag${c.open_flags === 1 ? '' : 's'} — review in dashboard`}
+                      className="flex shrink-0 items-center gap-1 border border-red-500/50 bg-red-500/10 px-1.5 py-px text-[8px] uppercase tracking-[0.1em] text-red-300"
+                    >
+                      <Flag className="h-2.5 w-2.5" />
+                      {c.open_flags}
+                    </span>
+                  )}
+                </span>
                 <span className="block truncate text-[10px] text-vault-faint">{c.email ?? 'no email'}</span>
                 {c.activity && (
                   <span className="mt-1 block">
@@ -519,6 +787,12 @@ export default function SupabaseClients() {
           result={detail}
           loading={detailLoading}
           error={detailError}
+          photoBusy={photoBusy}
+          flagBusy={flagBusy}
+          notice={notice}
+          onPhoto={handlePhoto}
+          onFlag={handleFlag}
+          onUpdateFlag={handleUpdateFlag}
           onClose={() => setDrawer(null)}
         />
       )}

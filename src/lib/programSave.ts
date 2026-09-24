@@ -70,8 +70,20 @@ export interface ClientSummary {
   full_name: string
   email: string | null
   status: string | null
+  photo_url?: string | null
   /** Current-week program activity aggregated by the clients action. */
   activity?: { week: number; done: number; total: number } | null
+  open_flags?: number
+}
+
+export interface ClientFlag {
+  id: string
+  flagged_by: string
+  reason: string
+  status: 'open' | 'reviewing' | 'resolved'
+  resolution_notes: string | null
+  created_at: string
+  resolved_at: string | null
 }
 
 export async function loadProgramsFromSupabase(): Promise<LoadedProgram[]> {
@@ -128,6 +140,7 @@ export interface ClientDetail {
   status: string | null
   notes: string | null
   created_at: string | null
+  photo_url: string | null
 }
 
 export interface ClientBooking {
@@ -158,6 +171,48 @@ export interface ClientDetailResult {
   programs: ClientProgramSummary[]
   bookings: ClientBooking[]
   completions: { workout_id: string; week_number: number; completed_at: string }[]
+  flags: ClientFlag[]
+}
+
+/* ---- profile photo + fraud flags -------------------------------------------- */
+
+/** Downscale happens client-side; this ships a small JPEG to the photos bucket. */
+export async function uploadClientPhoto(
+  clientId: string,
+  dataBase64: string,
+): Promise<{ photo_url: string }> {
+  const { data, error } = await supabase.functions.invoke('save-program', {
+    body: { action: 'upload_photo', client_id: clientId, data_base64: dataBase64, secret: BUILDER_SECRET },
+  })
+  if (error) throw new Error(error.message)
+  if (data && typeof data === 'object' && 'error' in data) {
+    throw new Error(String((data as { error: unknown }).error))
+  }
+  return data as { photo_url: string }
+}
+
+export async function flagClient(clientId: string, reason: string, flaggedBy = 'staff'): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('save-program', {
+    body: { action: 'flag_client', client_id: clientId, reason, flagged_by: flaggedBy, secret: BUILDER_SECRET },
+  })
+  if (error) throw new Error(error.message)
+  if (data && typeof data === 'object' && 'error' in data) {
+    throw new Error(String((data as { error: unknown }).error))
+  }
+}
+
+export async function updateClientFlag(
+  flagId: string,
+  status: 'open' | 'reviewing' | 'resolved',
+  notes?: string | null,
+): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('save-program', {
+    body: { action: 'update_flag', flag_id: flagId, status, notes, secret: BUILDER_SECRET },
+  })
+  if (error) throw new Error(error.message)
+  if (data && typeof data === 'object' && 'error' in data) {
+    throw new Error(String((data as { error: unknown }).error))
+  }
 }
 
 export async function loadClientDetail(clientId: string): Promise<ClientDetailResult> {

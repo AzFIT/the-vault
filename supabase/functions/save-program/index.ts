@@ -41,19 +41,26 @@ Deno.serve(async (req: Request) => {
 
   // ---- action: clients -----------------------------------------------------
   // Roster rows + a current-week activity summary per client (program workouts
-  // and completions aggregated server-side so the cards don't need N+1 calls).
+  // and completions aggregated server-side so the cards don't need N+1 calls)
+  // + open fraud-flag counts and profile photos.
   if (body.action === 'clients') {
     const { data: clients, error } = await supabase
       .from('clients')
-      .select('id,full_name,email,status')
+      .select('id,full_name,email,status,photo_url')
       .eq('trainer_id', trainerId)
       .order('full_name')
     if (error) return json({ error: error.message }, 500)
-    const list = (clients ?? []) as { id: string; full_name: string; email: string | null; status: string | null }[]
+    const list = (clients ?? []) as {
+      id: string
+      full_name: string
+      email: string | null
+      status: string | null
+      photo_url: string | null
+    }[]
     if (list.length === 0) return json({ clients: [] })
 
     const ids = list.map((c) => c.id)
-    const [{ data: programs }, { data: completions }] = await Promise.all([
+    const [{ data: programs }, { data: completions }, { data: openFlags }] = await Promise.all([
       supabase
         .from('programs')
         .select('id,client_id,duration_weeks,start_date,updated_at,workouts(id)')
@@ -63,6 +70,7 @@ Deno.serve(async (req: Request) => {
         .from('client_session_completions')
         .select('client_id,workout_id,week_number')
         .in('client_id', ids),
+      supabase.from('client_flags').select('client_id').eq('status', 'open').in('client_id', ids),
     ])
 
     // Current program per client = most recently updated assignment.
@@ -76,6 +84,11 @@ Deno.serve(async (req: Request) => {
         start: (p.start_date as string | null) ?? null,
         workoutIds: ((p.workouts ?? []) as { id: string }[]).map((w) => w.id),
       })
+    }
+
+    const flagCount = new Map<string, number>()
+    for (const f of (openFlags ?? []) as { client_id: string }[]) {
+      flagCount.set(f.client_id, (flagCount.get(f.client_id) ?? 0) + 1)
     }
 
     const now = Date.now()
@@ -95,8 +108,82 @@ Deno.serve(async (req: Request) => {
     }
 
     return json({
-      clients: list.map((c) => ({ ...c, activity: byClient.get(c.id) ?? null })),
+      clients: list.map((c) => ({
+        ...c,
+        activity: byClient.get(c.id) ?? null,
+        open_flags: flagCount.get(c.id) ?? 0,
+      })),
     })
+  }
+
+  // ---- action: upload_photo ------------------------------------------------
+  // Store a face photo for a client in the public client-photos bucket and
+  // pin the URL on the client row. Front-desk flow: snap/attach, done.
+  if (body.action === 'upload_photo') {
+    const clientId = String(body.client_id ?? '')
+    const dataBase64 = String(body.data_base64 ?? '').replace(/^data:image\/\w+;base64,/, '')
+    if (!clientId || !dataBase64) return json({ error: 'client_id and data_base64 required' }, 400)
+    let bytes: Uint8Array
+    try {
+      const bin = atob(dataBase64)
+      bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0))
+    } catch {
+      return json({ error: 'invalid base64 image data' }, 400)
+    }
+    if (bytes.length > 500_000) return json({ error: 'image too large — keep it under ~500 KB' }, 400)
+    const path = `${clientId}.jpg`
+    const { error: upErr } = await supabase.storage
+      .from('client-photos')
+      .upload(path, bytes, { contentType: 'image/jpeg', upsert: true })
+    if (upErr) return json({ error: upErr.message }, 500)
+    const { data: urlData } = supabase.storage.from('client-photos').getPublicUrl(path)
+    const photoUrl = `${urlData.publicUrl}?v=${Date.now()}`
+    const { error: updErr } = await supabase
+      .from('clients')
+      .update({ photo_url: photoUrl })
+      .eq('id', clientId)
+    if (updErr) return json({ error: updErr.message }, 500)
+    return json({ ok: true, photo_url: photoUrl })
+  }
+
+  // ---- action: flag_client ---------------------------------------------------
+  // Discreet fraud flag: staff suspect the person scanning in isn't the member.
+  // No confrontation — flag, and management reviews from the flags list.
+  if (body.action === 'flag_client') {
+    const clientId = String(body.client_id ?? '')
+    const reason = String(body.reason ?? '').trim()
+    const flaggedBy = String(body.flagged_by ?? 'staff').trim() || 'staff'
+    if (!clientId) return json({ error: 'client_id required' }, 400)
+    const { data, error } = await supabase
+      .from('client_flags')
+      .insert({ client_id: clientId, flagged_by: flaggedBy, reason })
+      .select('id,created_at')
+      .single()
+    if (error || !data) return json({ error: error?.message ?? 'flag failed' }, 500)
+    return json({ ok: true, flag: data })
+  }
+
+  // ---- action: update_flag ---------------------------------------------------
+  // Management review: move a flag through open → reviewing → resolved.
+  if (body.action === 'update_flag') {
+    const flagId = String(body.flag_id ?? '')
+    const status = String(body.status ?? '')
+    const notes = body.notes != null ? String(body.notes) : null
+    if (!flagId || !['open', 'reviewing', 'resolved'].includes(status)) {
+      return json({ error: 'flag_id and valid status required' }, 400)
+    }
+    const { data, error } = await supabase
+      .from('client_flags')
+      .update({
+        status,
+        resolution_notes: notes,
+        resolved_at: status === 'resolved' ? new Date().toISOString() : null,
+      })
+      .eq('id', flagId)
+      .select('id,status')
+      .single()
+    if (error || !data) return json({ error: error?.message ?? 'update failed' }, 500)
+    return json({ ok: true, flag: data })
   }
 
   // ---- action: assign ------------------------------------------------------
@@ -198,6 +285,13 @@ Deno.serve(async (req: Request) => {
       .eq('client_id', clientId)
       .order('completed_at', { ascending: false })
 
+    const { data: flags } = await supabase
+      .from('client_flags')
+      .select('id,flagged_by,reason,status,resolution_notes,created_at,resolved_at')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
     const shaped = ((programs ?? []) as Record<string, unknown>[]).map((p) => {
       const workouts = ((p.workouts ?? []) as Record<string, unknown>[])
         .map((w) => ({
@@ -210,7 +304,7 @@ Deno.serve(async (req: Request) => {
       const { workouts: _w, ...rest } = p
       return { ...rest, workouts }
     })
-    return json({ client, programs: shaped, bookings, completions: completions ?? [] })
+    return json({ client, programs: shaped, bookings, completions: completions ?? [], flags: flags ?? [] })
   }
 
   // ---- action: my_program ------------------------------------------------------

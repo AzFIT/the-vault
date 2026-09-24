@@ -1430,6 +1430,20 @@ export default function ProgramBuilder({
                                   className="h-3.5 w-3.5 accent-white"
                                 />
                                 <span className="flex-1 truncate">{c.full_name}</span>
+                                {c.activity && (
+                                  <span
+                                    title="Current-week consistency on their assigned program"
+                                    className={`tnum shrink-0 border px-1.5 py-px text-[8px] uppercase tracking-[0.08em] ${
+                                      c.activity.done >= c.activity.total
+                                        ? 'border-emerald-500/40 text-emerald-300'
+                                        : c.activity.done > 0
+                                          ? 'border-gold/50 text-vault-gold'
+                                          : 'border-vault-border text-vault-faint'
+                                    }`}
+                                  >
+                                    W{c.activity.week} · {c.activity.done}/{c.activity.total}
+                                  </span>
+                                )}
                                 {checked && (
                                   <span className="text-[9px] uppercase tracking-[0.1em] text-vault-muted">
                                     Assigned
